@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin – FuvarPortál</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav">
+      <a class="logo" href="index.html">FuvarPortál</a>
+      <nav>
+        <a href="index.html">Főoldal</a>
+        <a href="fuvarok.html">Fuvarok</a>
+        <a href="fuvar-feladas.html">Fuvar feladása</a>
+        <a href="kapcsolat.html">Kapcsolat</a>
+        <a href="admin.html" class="nav-cta">Admin</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="section">
+    <div class="container admin-grid">
+      <section class="card">
+        <span class="eyebrow">Beállítások</span>
+        <h1>Weboldal alapadatok</h1>
+        <p class="lead small">Ide lehet később beírni a személyes és vállalkozási adatokat. Most minden mező minta vagy üres.</p>
+        <form id="settingsForm" class="form-stack">
+          <label><span>Weboldal neve</span><input name="siteName" type="text" placeholder="FuvarPortál" /></label>
+          <label><span>Vállalkozás neve</span><input name="businessName" type="text" placeholder="[kitöltendő]" /></label>
+          <label><span>Bemutatkozás</span><textarea name="intro" rows="4" placeholder="[kitöltendő]"></textarea></label>
+          <div class="grid-2">
+            <label><span>E-mail cím</span><input name="email" type="email" placeholder="[kitöltendő]" /></label>
+            <label><span>Telefonszám</span><input name="phone" type="text" placeholder="[kitöltendő]" /></label>
+          </div>
+          <div class="grid-2">
+            <label><span>Város / telephely</span><input name="city" type="text" placeholder="[kitöltendő]" /></label>
+            <label><span>Admin e-mail</span><input name="adminEmail" type="email" placeholder="[kitöltendő]" /></label>
+          </div>
+          <button type="submit" class="btn btn-primary">Beállítások mentése</button>
+          <p id="settingsMessage" class="form-message"></p>
+        </form>
+      </section>
+
+      <section class="card">
+        <span class="eyebrow">Hirdetések</span>
+        <h2>Beküldött fuvarok</h2>
+        <p class="lead small">Ez demó admin. GitHub Pages alatt a helyi böngészőben tárolt adatokat kezeli. Valódi többfelhasználós működéshez Supabase szükséges.</p>
+        <div id="adminTripsList" class="list-stack"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

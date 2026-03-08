@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fuvar feladása – FuvarPortál</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav">
+      <a class="logo" href="index.html">FuvarPortál</a>
+      <nav>
+        <a href="index.html">Főoldal</a>
+        <a href="fuvarok.html">Fuvarok</a>
+        <a href="fuvar-feladas.html">Fuvar feladása</a>
+        <a href="kapcsolat.html">Kapcsolat</a>
+        <a href="admin.html" class="nav-cta">Admin</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="section">
+    <div class="container narrow">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">Új hirdetés</span>
+          <h1>Fuvar feladása</h1>
+          <p class="lead small">A beküldött fuvar demó módban a böngésző helyi tárolójába mentődik. Később ezt Supabase adatbázisra lehet cserélni.</p>
+        </div>
+      </div>
+
+      <form id="tripForm" class="card form-stack">
+        <div class="grid-2">
+          <label>
+            <span>Név / cégnév</span>
+            <input name="driverName" type="text" placeholder="[kitöltendő]" required />
+          </label>
+          <label>
+            <span>Kapcsolati e-mail</span>
+            <input name="contactEmail" type="email" placeholder="[kitöltendő]" required />
+          </label>
+        </div>
+        <div class="grid-2">
+          <label>
+            <span>Telefonszám</span>
+            <input name="phone" type="text" placeholder="[kitöltendő]" />
+          </label>
+          <label>
+            <span>Csomag típusa</span>
+            <select name="packageType">
+              <option value="Alap">Alap</option>
+              <option value="Kiemelt">Kiemelt</option>
+              <option value="Prémium">Prémium</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid-2">
+          <label>
+            <span>Indulási hely</span>
+            <input name="origin" type="text" required />
+          </label>
+          <label>
+            <span>Érkezési hely</span>
+            <input name="destination" type="text" required />
+          </label>
+        </div>
+        <div class="grid-3">
+          <label>
+            <span>Dátum</span>
+            <input name="date" type="date" required />
+          </label>
+          <label>
+            <span>Indulás időpontja</span>
+            <input name="time" type="time" required />
+          </label>
+          <label>
+            <span>Szabad helyek</span>
+            <input name="seats" type="number" min="1" max="8" value="3" required />
+          </label>
+        </div>
+        <div class="grid-2">
+          <label>
+            <span>Ár / fő (Ft)</span>
+            <input name="price" type="number" min="0" step="100" placeholder="pl. 4500" required />
+          </label>
+          <label>
+            <span>Állapot</span>
+            <select name="status">
+              <option value="Függőben">Függőben</option>
+              <option value="Jóváhagyva">Jóváhagyva</option>
+            </select>
+          </label>
+        </div>
+        <label>
+          <span>Megjegyzés</span>
+          <textarea name="note" rows="5" placeholder="pl. kisebb csomag elfér, telefonos egyeztetés szükséges"></textarea>
+        </label>
+        <label class="checkbox-row">
+          <input name="termsAccepted" type="checkbox" required />
+          <span>Elfogadom a feltételeket és hozzájárulok az adatok kezeléséhez.</span>
+        </label>
+        <button type="submit" class="btn btn-primary">Fuvar beküldése</button>
+        <p id="tripFormMessage" class="form-message"></p>
+      </form>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

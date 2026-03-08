@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kapcsolat – FuvarPortál</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav">
+      <a class="logo" href="index.html">FuvarPortál</a>
+      <nav>
+        <a href="index.html">Főoldal</a>
+        <a href="fuvarok.html">Fuvarok</a>
+        <a href="fuvar-feladas.html">Fuvar feladása</a>
+        <a href="kapcsolat.html">Kapcsolat</a>
+        <a href="admin.html" class="nav-cta">Admin</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="section">
+    <div class="container two-col">
+      <section class="card">
+        <span class="eyebrow">Kapcsolat</span>
+        <h1>Kapcsolati adatok</h1>
+        <div class="contact-list">
+          <p><strong>Vállalkozás:</strong> <span data-setting="businessName">[kitöltendő]</span></p>
+          <p><strong>E-mail:</strong> <span data-setting="email">[kitöltendő]</span></p>
+          <p><strong>Telefon:</strong> <span data-setting="phone">[kitöltendő]</span></p>
+          <p><strong>Város / telephely:</strong> <span data-setting="city">[kitöltendő]</span></p>
+        </div>
+      </section>
+
+      <section class="card">
+        <span class="eyebrow">Mintaszöveg</span>
+        <h2>Kapcsolatfelvétel</h2>
+        <p class="lead small">Később ide lehet kötni valódi e-mail űrlapot FormSubmit, Netlify Forms vagy Supabase funkcióval.</p>
+        <form class="form-stack" onsubmit="event.preventDefault(); alert('Ez a demó verzióban csak minta űrlap.');">
+          <label><span>Név</span><input type="text" placeholder="Név" /></label>
+          <label><span>E-mail</span><input type="email" placeholder="Email" /></label>
+          <label><span>Üzenet</span><textarea rows="5" placeholder="Üzenet"></textarea></label>
+          <button type="submit" class="btn btn-primary">Üzenet küldése</button>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

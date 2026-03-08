@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fuvarok – FuvarPortál</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav">
+      <a class="logo" href="index.html">FuvarPortál</a>
+      <nav>
+        <a href="index.html">Főoldal</a>
+        <a href="fuvarok.html">Fuvarok</a>
+        <a href="fuvar-feladas.html">Fuvar feladása</a>
+        <a href="kapcsolat.html">Kapcsolat</a>
+        <a href="admin.html" class="nav-cta">Admin</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="section">
+    <div class="container">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">Keresés</span>
+          <h1>Elérhető fuvarok</h1>
+        </div>
+      </div>
+
+      <form id="tripFilterForm" class="card filter-bar grid-4">
+        <label>
+          <span>Indulási hely</span>
+          <input type="text" id="filterOrigin" placeholder="pl. Budapest" />
+        </label>
+        <label>
+          <span>Érkezési hely</span>
+          <input type="text" id="filterDestination" placeholder="pl. Debrecen" />
+        </label>
+        <label>
+          <span>Dátum</span>
+          <input type="date" id="filterDate" />
+        </label>
+        <label>
+          <span>&nbsp;</span>
+          <button type="submit" class="btn btn-primary btn-full">Szűrés</button>
+        </label>
+      </form>
+
+      <div id="tripsList" class="list-stack"></div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
