@@ -36,7 +36,7 @@ const App = (() => {
 
   async function fetchSettings() {
     try {
-      const { data } = await sb.from(tableSettings).select('*').eq('id',1).maybeSingle();
+      const { data } = await sb.from(tableSettings).select('*').order('id', { ascending: true }).limit(1).maybeSingle();
       return data || null;
     } catch (e) { return null; }
   }
@@ -557,13 +557,19 @@ const App = (() => {
         const fd = new FormData(settingsForm);
         msg.textContent = 'Mentés...';
         const payload = {
-          id:1,
           site_name: fd.get('siteName'), company_name: fd.get('companyName'), contact_email: fd.get('email'),
           contact_phone: fd.get('phone'), city: fd.get('city'), admin_email: fd.get('adminEmail'), description: fd.get('description')
         };
+        if (settings?.id) payload.id = settings.id;
         try { APP_CONFIG.adminEmail = String(fd.get('adminEmail') || APP_CONFIG.adminEmail); } catch (_) {}
-        const { error } = await sb.from(tableSettings).upsert(payload, { onConflict:'id' });
+        let error = null;
+        if (settings?.id) {
+          ({ error } = await sb.from(tableSettings).update(payload).eq('id', settings.id));
+        } else {
+          ({ error } = await sb.from(tableSettings).insert([payload]));
+        }
         msg.textContent = error ? 'Nem sikerült menteni.' : 'Mentve.';
+        if (!error) location.reload();
       });
     }
     try {

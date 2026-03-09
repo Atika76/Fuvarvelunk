@@ -25,7 +25,7 @@ window.AppAuth = (() => {
   async function fetchAdminEmail(force=false) {
     if (cachedAdminEmail && !force) return cachedAdminEmail;
     try {
-      const { data } = await sb.from('beallitasok').select('admin_email').eq('id', 1).maybeSingle();
+      const { data } = await sb.from('beallitasok').select('id,admin_email').order('id', { ascending: true }).limit(1).maybeSingle();
       cachedAdminEmail = data?.admin_email || APP_CONFIG.adminEmail;
     } catch (_) {
       cachedAdminEmail = APP_CONFIG.adminEmail;
