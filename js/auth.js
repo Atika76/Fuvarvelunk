@@ -46,7 +46,7 @@ window.AppAuth = (() => {
     } catch(_) { return defaultUrl; }
   }
 
-  async function requireAuth(next='auth.html') {
+  async function requireAuth(next='belepes.html') {
     const session = await getSession();
     if (!session) {
       saveNext(location.pathname.split('/').pop() + location.search + location.hash);
@@ -57,7 +57,7 @@ window.AppAuth = (() => {
   }
 
   async function requireAdmin() {
-    const ok = await requireAuth('auth.html');
+    const ok = await requireAuth('belepes.html');
     if (!ok) return false;
     const admin = await isAdmin();
     if (!admin) {
@@ -81,7 +81,7 @@ window.AppAuth = (() => {
       email,
       password,
       options: {
-        emailRedirectTo: APP_CONFIG.siteUrl + 'auth.html',
+        emailRedirectTo: APP_CONFIG.siteUrl + 'belepes.html',
         data: { full_name: fullName }
       }
     });
@@ -103,7 +103,7 @@ window.AppAuth = (() => {
   sb.auth.onAuthStateChange(async (event, session) => {
     sessionCache = session || null;
     await updateNav();
-    if (event === 'SIGNED_IN' && location.pathname.endsWith('auth.html')) {
+    if (event === 'SIGNED_IN' && location.pathname.endsWith('belepes.html')) {
       setTimeout(async () => {
         const adminEmail = await getAdminEmail();
         const target = ((session?.user?.email || '').toLowerCase() === adminEmail) ? 'admin.html' : consumeNext('index.html');

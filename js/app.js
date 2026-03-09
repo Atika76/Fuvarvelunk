@@ -304,7 +304,7 @@ const App = (() => {
       }
       const bookBtn = e.target.closest('.js-book-trip');
       if (bookBtn) {
-        const ok = await AppAuth.requireAuth('auth.html');
+        const ok = await AppAuth.requireAuth('belepes.html');
         if (!ok) return;
         const trip = JSON.parse(decodeURIComponent(bookBtn.dataset.trip));
         const session = await AppAuth.getSession();
@@ -415,7 +415,7 @@ const App = (() => {
   async function initTripFormPage() {
     const form = document.getElementById('tripForm');
     if (!form) return;
-    const ok = await AppAuth.requireAuth('auth.html');
+    const ok = await AppAuth.requireAuth('belepes.html');
     if (!ok) return;
     const session = await AppAuth.getSession();
     const user = session?.user;
