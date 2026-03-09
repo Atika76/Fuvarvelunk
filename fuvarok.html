@@ -6,6 +6,7 @@
   <title>Fuvarok – Utazz Velem</title>
   <meta name="description" content="Böngészd az elérhető fuvarokat indulási hely, érkezési hely és dátum szerint." />
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -20,6 +21,11 @@
         <a href="fuvarok.html" class="active">Fuvarok</a>
         <a href="fuvar-feladas.html">Fuvar feladása</a>
         <a href="kapcsolat.html">Kapcsolat</a>
+        <a href="belepes.html" class="nav-cta" data-guest-link>Belépés / Regisztráció</a>
+        <span class="nav-user" data-user-badge hidden>
+          <span data-user-email></span>
+          <button type="button" class="nav-cta nav-logout" data-logout-button>Kilépés</button>
+        </span>
         <a href="admin.html" class="nav-cta" data-admin-link hidden>Admin</a>
       </nav>
     </div>
@@ -31,7 +37,7 @@
         <div>
           <span class="eyebrow">Keresés</span>
           <h1>Elérhető fuvarok</h1>
-          <p class="lead small">Szűrj útvonal és dátum alapján, majd vedd fel a kapcsolatot a hirdetővel.</p>
+          <p class="lead small">Szűrj útvonal és dátum alapján, nyisd meg térképen, vagy készíts Facebook-poszt képet.</p>
         </div>
       </div>
 
@@ -54,22 +60,36 @@
         </label>
       </form>
 
-      <div id="tripsList" class="list-stack"></div>
+      <div class="section mini-gap">
+        <div class="two-col align-start">
+          <div id="tripsList" class="list-stack"></div>
+          <aside class="card glass-glow map-card sticky-card">
+            <div class="map-card-header">
+              <div>
+                <span class="eyebrow">Térkép</span>
+                <h2>Útvonal előnézet</h2>
+              </div>
+            </div>
+            <div id="routeMap" class="map-view"></div>
+            <p id="mapStatus" class="muted map-status">Válassz egy fuvart a listából, és megjelenítjük a térképes előnézetet.</p>
+            <div class="map-actions">
+              <a id="openDirectionsLink" class="btn btn-secondary btn-full" href="#" target="_blank" rel="noopener" hidden>Megnyitás OpenStreetMapen</a>
+            </div>
+          </aside>
+        </div>
+      </div>
     </div>
   </main>
 
   <footer class="site-footer compact-footer">
     <div class="container footer-grid">
-      <div>
-        <strong data-setting="siteName">Utazz Velem</strong>
-      </div>
-      <div>
-        <p>E-mail: <span data-setting="email">info@utazzvelem.hu</span></p>
-      </div>
+      <div><strong data-setting="siteName">Utazz Velem</strong></div>
+      <div><p>E-mail: <span data-setting="email">info@utazzvelem.hu</span></p></div>
     </div>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="app.js"></script>
   <script src="auth.js"></script>
 </body>

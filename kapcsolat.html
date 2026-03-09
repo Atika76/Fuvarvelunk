@@ -20,13 +20,18 @@
         <a href="fuvarok.html">Fuvarok</a>
         <a href="fuvar-feladas.html">Fuvar feladása</a>
         <a href="kapcsolat.html" class="active">Kapcsolat</a>
+        <a href="belepes.html" class="nav-cta" data-guest-link>Belépés / Regisztráció</a>
+        <span class="nav-user" data-user-badge hidden>
+          <span data-user-email></span>
+          <button type="button" class="nav-cta nav-logout" data-logout-button>Kilépés</button>
+        </span>
         <a href="admin.html" class="nav-cta" data-admin-link hidden>Admin</a>
       </nav>
     </div>
   </header>
 
   <main class="section">
-    <div class="container two-col">
+    <div class="container two-col align-start">
       <section class="card glass-glow">
         <span class="eyebrow">Kapcsolat</span>
         <h1>Kapcsolati adatok</h1>
@@ -42,7 +47,7 @@
       <section class="card glass-glow">
         <span class="eyebrow">Üzenetküldés</span>
         <h2>Írj nekünk</h2>
-        <p class="lead small">Az üzenet gomb megnyomásával az alapértelmezett levelezőprogramod nyílik meg az előre kitöltött adatokkal.</p>
+        <p class="lead small">Az üzenet gombbal az alapértelmezett levelezőprogramod nyílik meg az előre kitöltött adatokkal.</p>
         <form id="contactForm" class="form-stack">
           <label><span>Név</span><input type="text" name="name" placeholder="Név" required /></label>
           <label><span>E-mail</span><input type="email" name="email" placeholder="E-mail" required /></label>

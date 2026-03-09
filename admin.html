@@ -20,8 +20,11 @@
         <a href="fuvarok.html">Fuvarok</a>
         <a href="fuvar-feladas.html">Fuvar feladása</a>
         <a href="kapcsolat.html">Kapcsolat</a>
+        <span class="nav-user" data-user-badge>
+          <span data-user-email></span>
+          <button type="button" class="nav-cta nav-logout" data-logout-button>Kilépés</button>
+        </span>
         <a href="admin.html" class="nav-cta active" data-admin-link>Admin</a>
-        <button type="button" class="nav-cta nav-logout" data-logout-button>Kilépés</button>
       </nav>
     </div>
   </header>
@@ -31,8 +34,7 @@
       <section class="card glass-glow">
         <span class="eyebrow">Beállítások</span>
         <h1>Weboldal adatai</h1>
-        <p class="lead small">Itt tudod módosítani a névjegyadatokat és az oldalon megjelenő alapinformációkat.</p>
-        <p class="lead small">Jelenlegi admin e-mail: <strong data-admin-email-display>cegweb26@gmail.com</strong></p>
+        <p class="lead small">Itt tudod módosítani az oldalon megjelenő alapinformációkat. Az admin e-mail jelenleg kódban van rögzítve a biztonság miatt.</p>
         <form id="settingsForm" class="form-stack">
           <label><span>Weboldal neve</span><input name="siteName" type="text" placeholder="Utazz Velem" /></label>
           <label><span>Vállalkozás neve</span><input name="businessName" type="text" placeholder="Utazz Velem" /></label>
@@ -43,7 +45,7 @@
           </div>
           <div class="grid-2">
             <label><span>Város / telephely</span><input name="city" type="text" placeholder="Budapest" /></label>
-            <label><span>Admin e-mail</span><input name="adminEmail" type="email" placeholder="admin@utazzvelem.hu" /></label>
+            <label><span>Aktív admin e-mail</span><input name="adminEmail" type="email" placeholder="cegweb26@gmail.com" readonly /></label>
           </div>
           <button type="submit" class="btn btn-primary">Beállítások mentése</button>
           <p id="settingsMessage" class="form-message"></p>
@@ -51,8 +53,16 @@
       </section>
 
       <section class="card glass-glow">
-        <span class="eyebrow">Hirdetések</span>
-        <h2>Beküldött fuvarok</h2>
+        <div class="section-head tight-head">
+          <div>
+            <span class="eyebrow">Hirdetések</span>
+            <h2>Beküldött fuvarok</h2>
+          </div>
+          <div class="admin-badges">
+            <span class="mini-badge">Admin: <strong data-admin-email-display>cegweb26@gmail.com</strong></span>
+            <span class="mini-badge">Email értesítés: előkészítve</span>
+          </div>
+        </div>
         <p class="lead small">Az itt megjelenő fuvarokat át tudod nézni, jóvá tudod hagyni vagy törölni.</p>
         <div id="adminTripsList" class="list-stack"></div>
       </section>
