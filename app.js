@@ -1,5 +1,8 @@
 const SETTINGS_KEY = 'utazzvelem_settings_v2';
 const TRIPS_KEY = 'utazzvelem_trips_v2';
+const SUPABASE_URL = 'https://qkppqjcazakocxgxtlzc.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_RnrWDmT0UUZdP-fIppVtgQ_vTw0N_2o';
+const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
 const defaultSettings = {
   siteName: 'Utazz Velem',
@@ -81,6 +84,52 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+function normalizeStatus(status) {
+  const safe = String(status || '').trim().toLowerCase();
+  if (safe === 'jóváhagyva' || safe === 'jovahagyva') return 'Jóváhagyva';
+  if (safe === 'törölve' || safe === 'torolve') return 'Törölve';
+  return 'Függőben';
+}
+
+function toDbStatus(status) {
+  return normalizeStatus(status).toLowerCase();
+}
+
+function mapDbTrip(row) {
+  return {
+    id: row.id,
+    driverName: row.nev || '',
+    contactEmail: row.email || '',
+    phone: row.telefon || '',
+    packageType: row.csomag || 'Alap',
+    origin: row.indulas || '',
+    destination: row.erkezes || '',
+    date: row.datum || '',
+    time: row.ido || '',
+    seats: Number(row.helyek || 0),
+    price: Number(row.ar || 0),
+    note: row.megjegyzes || '',
+    status: normalizeStatus(row.statusz),
+    createdAt: row.created_at || new Date().toISOString()
+  };
+}
+
+function toDbTrip(trip) {
+  return {
+    nev: trip.driverName,
+    email: trip.contactEmail,
+    telefon: trip.phone,
+    indulas: trip.origin,
+    erkezes: trip.destination,
+    datum: trip.date,
+    ido: trip.time,
+    helyek: trip.seats,
+    ar: trip.price,
+    megjegyzes: trip.note,
+    statusz: toDbStatus(trip.status)
+  };
+}
+
 function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -94,7 +143,7 @@ function saveSettings(settings) {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
-function loadTrips() {
+function loadTripsLocal() {
   try {
     const raw = localStorage.getItem(TRIPS_KEY);
     if (raw) return JSON.parse(raw);
@@ -103,13 +152,82 @@ function loadTrips() {
   return [...defaultTrips];
 }
 
-function saveTrips(trips) {
+function saveTripsLocal(trips) {
   localStorage.setItem(TRIPS_KEY, JSON.stringify(trips));
 }
 
+async function ensureSeedTrips() {
+  if (!supabaseClient) return;
+  const { count, error } = await supabaseClient
+    .from('fuvarok')
+    .select('id', { count: 'exact', head: true });
+
+  if (error || count !== 0) return;
+
+  const seedTrips = defaultTrips.map((trip) => toDbTrip(trip));
+  await supabaseClient.from('fuvarok').insert(seedTrips);
+}
+
+async function loadTrips() {
+  if (!supabaseClient) return loadTripsLocal();
+
+  try {
+    await ensureSeedTrips();
+    const { data, error } = await supabaseClient
+      .from('fuvarok')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    const trips = (data || []).map(mapDbTrip);
+    saveTripsLocal(trips);
+    return trips;
+  } catch (error) {
+    console.error('Supabase betöltési hiba:', error);
+    return loadTripsLocal();
+  }
+}
+
+async function createTrip(trip) {
+  if (!supabaseClient) {
+    const trips = loadTripsLocal();
+    trips.unshift(trip);
+    saveTripsLocal(trips);
+    return trip;
+  }
+
+  const { data, error } = await supabaseClient
+    .from('fuvarok')
+    .insert([toDbTrip(trip)])
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return mapDbTrip(data);
+}
+
+async function updateTripStatus(id, status) {
+  if (!supabaseClient) {
+    const updatedTrips = loadTripsLocal().map((trip) => {
+      if (String(trip.id) !== String(id)) return trip;
+      return { ...trip, status: normalizeStatus(status) };
+    });
+    saveTripsLocal(updatedTrips);
+    return;
+  }
+
+  const { error } = await supabaseClient
+    .from('fuvarok')
+    .update({ statusz: toDbStatus(status) })
+    .eq('id', Number(id));
+
+  if (error) throw error;
+}
+
 function statusClass(status) {
-  if (status === 'Jóváhagyva') return 'approved';
-  if (status === 'Törölve') return 'deleted';
+  const normalized = normalizeStatus(status);
+  if (normalized === 'Jóváhagyva') return 'approved';
+  if (normalized === 'Törölve') return 'deleted';
   return 'pending';
 }
 
@@ -130,7 +248,7 @@ function tripCard(trip, isAdmin = false) {
           </div>
           <span class="status ${statusClass(trip.status)}">${escapeHtml(trip.status)}</span>
         </div>
-        <p style="color:var(--muted);margin:12px 0 0;"><strong>Sofőr / cég:</strong> ${escapeHtml(trip.driverName)} · <strong>Csomag:</strong> ${escapeHtml(trip.packageType)}</p>
+        <p style="color:var(--muted);margin:12px 0 0;"><strong>Sofőr / cég:</strong> ${escapeHtml(trip.driverName)} · <strong>Csomag:</strong> ${escapeHtml(trip.packageType || 'Alap')}</p>
         ${safeNote}
       </div>
       <div class="trip-meta">
@@ -161,10 +279,10 @@ function applySettingsToPage() {
   if (emailLink) emailLink.setAttribute('href', `mailto:${settings.email}`);
 }
 
-function initHome() {
+async function initHome() {
   const featured = document.getElementById('featuredTrips');
   if (featured) {
-    const trips = loadTrips().filter((trip) => trip.status === 'Jóváhagyva').slice(0, 3);
+    const trips = (await loadTrips()).filter((trip) => trip.status === 'Jóváhagyva').slice(0, 3);
     featured.innerHTML = trips.length
       ? trips.map((trip) => `
           <article class="card feature-card glass-glow">
@@ -192,7 +310,7 @@ function initHome() {
   }
 }
 
-function initTripsPage() {
+async function initTripsPage() {
   const list = document.getElementById('tripsList');
   if (!list) return;
 
@@ -205,12 +323,12 @@ function initTripsPage() {
   destinationInput.value = params.get('destination') || '';
   dateInput.value = params.get('date') || '';
 
-  function render() {
+  async function render() {
     const origin = originInput.value.trim().toLowerCase();
     const destination = destinationInput.value.trim().toLowerCase();
     const date = dateInput.value;
 
-    const trips = loadTrips()
+    const trips = (await loadTrips())
       .filter((trip) => trip.status === 'Jóváhagyva')
       .filter((trip) => {
         const matchesOrigin = !origin || trip.origin.toLowerCase().includes(origin);
@@ -224,10 +342,10 @@ function initTripsPage() {
       : '<div class="empty-state">Nincs a keresésnek megfelelő fuvar.</div>';
   }
 
-  render();
-  document.getElementById('tripFilterForm').addEventListener('submit', (event) => {
+  await render();
+  document.getElementById('tripFilterForm').addEventListener('submit', async (event) => {
     event.preventDefault();
-    render();
+    await render();
   });
 }
 
@@ -235,8 +353,11 @@ function initTripForm() {
   const form = document.getElementById('tripForm');
   if (!form) return;
 
-  form.addEventListener('submit', (event) => {
+  form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    const messageBox = document.getElementById('tripFormMessage');
+    messageBox.textContent = 'Mentés folyamatban...';
+
     const formData = new FormData(form);
     const trip = {
       id: cryptoRandom(),
@@ -250,16 +371,19 @@ function initTripForm() {
       time: formData.get('time')?.toString() || '',
       seats: Number(formData.get('seats') || 0),
       price: Number(formData.get('price') || 0),
-      status: formData.get('status')?.toString() || 'Jóváhagyva',
+      status: 'Függőben',
       note: formData.get('note')?.toString().trim() || '',
       createdAt: new Date().toISOString()
     };
 
-    const trips = loadTrips();
-    trips.unshift(trip);
-    saveTrips(trips);
-    form.reset();
-    document.getElementById('tripFormMessage').textContent = 'A fuvar sikeresen rögzítve lett.';
+    try {
+      await createTrip(trip);
+      form.reset();
+      messageBox.textContent = 'A fuvar sikeresen rögzítve lett. Jóváhagyás után meg fog jelenni a listában.';
+    } catch (error) {
+      console.error('Mentési hiba:', error);
+      messageBox.textContent = 'Hiba történt a mentés során. Ellenőrizd a Supabase kapcsolatot.';
+    }
   });
 }
 
@@ -288,24 +412,24 @@ function initAdmin() {
   const list = document.getElementById('adminTripsList');
   if (!list) return;
 
-  function render() {
-    const trips = loadTrips();
+  async function render() {
+    const trips = await loadTrips();
     list.innerHTML = trips.length
       ? trips.map((trip) => tripCard(trip, true)).join('')
       : '<div class="empty-state">Jelenleg nincs beküldött fuvar.</div>';
 
     list.querySelectorAll('button[data-action]').forEach((button) => {
-      button.addEventListener('click', () => {
+      button.addEventListener('click', async () => {
         const id = button.getAttribute('data-id');
         const action = button.getAttribute('data-action');
-        const updatedTrips = loadTrips().map((trip) => {
-          if (trip.id !== id) return trip;
-          if (action === 'approve') return { ...trip, status: 'Jóváhagyva' };
-          if (action === 'delete') return { ...trip, status: 'Törölve' };
-          return trip;
-        });
-        saveTrips(updatedTrips);
-        render();
+        const status = action === 'approve' ? 'Jóváhagyva' : 'Törölve';
+        try {
+          await updateTripStatus(id, status);
+          await render();
+        } catch (error) {
+          console.error('Státuszfrissítési hiba:', error);
+          alert('Nem sikerült módosítani a fuvar állapotát.');
+        }
       });
     });
   }
@@ -329,10 +453,10 @@ function initContactForm() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   applySettingsToPage();
-  initHome();
-  initTripsPage();
+  await initHome();
+  await initTripsPage();
   initTripForm();
   initAdmin();
   initContactForm();
