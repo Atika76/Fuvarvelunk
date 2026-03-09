@@ -3,132 +3,70 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Fuvar feladása – Utazz Velem</title>
-  <meta name="description" content="Adj fel új fuvart néhány adat megadásával, egyszerűen és gyorsan." />
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
   <link rel="stylesheet" href="styles.css" />
+  <title>Fuvar feladása – Utazz Velem</title>
 </head>
-<body data-require-auth>
+<body>
   <header class="site-header">
     <div class="container nav">
-      <a class="logo" href="index.html">
-        <img src="assets/logo-utazzvelem.svg" alt="Utazz Velem logó" />
-        <span data-setting="siteName">Utazz Velem</span>
-      </a>
+      <a class="logo-wrap" href="index.html"><img src="assets/logo-utazzvelem.svg" alt="Utazz Velem logo"><span data-brand>Utazz Velem</span></a>
       <nav>
         <a href="index.html">Főoldal</a>
         <a href="fuvarok.html">Fuvarok</a>
-        <a href="fuvar-feladas.html" class="active">Fuvar feladása</a>
+        <a href="fuvar-feladas.html">Fuvar feladása</a>
         <a href="kapcsolat.html">Kapcsolat</a>
-        <a href="belepes.html" class="nav-cta" data-guest-link>Belépés / Regisztráció</a>
-        <span class="nav-user" data-user-badge hidden>
-          <span data-user-email></span>
-          <button type="button" class="nav-cta nav-logout" data-logout-button>Kilépés</button>
-        </span>
-        <a href="admin.html" class="nav-cta" data-admin-link hidden>Admin</a>
+        <a href="auth.html" data-auth="guest">Belépés / regisztráció</a>
+        <a href="admin.html" data-auth="admin" class="hidden">Admin</a>
+        <a href="#" data-auth="user" data-logout class="hidden">Kilépés</a>
       </nav>
     </div>
   </header>
-
   <main class="section">
-    <div class="container two-col align-start form-layout">
-      <div>
-        <div class="section-head">
-          <div>
-            <span class="eyebrow">Új fuvar</span>
-            <h1>Fuvar feladása</h1>
-            <p class="lead small">Fuvar feladásához bejelentkezés vagy regisztráció szükséges. A beküldött fuvar először függőben állapotban kerül be, az admin jóváhagyása után jelenik meg nyilvánosan.</p>
-          </div>
+    <div class="narrow">
+      <div class="section-head"><div><span class="eyebrow">Új fuvar</span><h1 class="page-title">Fuvar feladása</h1><p class="lead">Fuvar feladása csak regisztráció és belépés után lehetséges.</p></div></div>
+      <form id="tripForm" class="card form-stack">
+        <div class="grid-2">
+          <label><span>Név</span><input name="driverName" required placeholder="Sofőr neve"></label>
+          <label><span>Kapcsolati e-mail</span><input name="contactEmail" type="email" required></label>
         </div>
-
-        <form id="tripForm" class="card form-stack glass-glow">
-          <div class="grid-2">
-            <label>
-              <span>Név / cégnév</span>
-              <input name="driverName" type="text" placeholder="pl. Kovács Péter" required />
-            </label>
-            <label>
-              <span>Kapcsolati e-mail</span>
-              <input name="contactEmail" type="email" placeholder="pl. info@pelda.hu" required />
-            </label>
+        <div class="grid-2">
+          <label><span>Telefonszám</span><input name="phone" required placeholder="pl. +36 30 123 4567"></label>
+          <label><span>Autó típusa</span><input name="carType" placeholder="pl. Skoda Octavia"></label>
+        </div>
+        <div class="grid-2">
+          <label><span>Indulási hely</span><input name="origin" required></label>
+          <label><span>Érkezési hely</span><input name="destination" required></label>
+        </div>
+        <div class="grid-3">
+          <label><span>Dátum</span><input name="date" type="date" required></label>
+          <label><span>Indulási idő</span><input name="time" type="time" required></label>
+          <label><span>Ár / fő (Ft)</span><input name="price" type="number" min="0" step="100" required></label>
+        </div>
+        <div class="grid-2">
+          <label><span>Hány személyes az autó?</span><input name="osszHely" type="number" min="1" max="8" value="4" required></label>
+          <label><span>Mennyi szabad hely van most?</span><input name="szabadHely" type="number" min="1" max="8" value="4" required></label>
+        </div>
+        <div>
+          <span>Elfogadott fizetési módok</span>
+          <div class="inline-pills" style="margin-top:10px">
+            <label class="pill"><input type="checkbox" name="fizetesiMod" value="barion" checked> Bankkártya (Barion)</label>
+            <label class="pill"><input type="checkbox" name="fizetesiMod" value="cash" checked> Készpénz a helyszínen</label>
           </div>
-          <div class="grid-2">
-            <label>
-              <span>Telefonszám</span>
-              <input name="phone" type="text" placeholder="pl. +36 30 123 4567" />
-            </label>
-            <label>
-              <span>Csomag típusa</span>
-              <select name="packageType">
-                <option value="Alap">Alap</option>
-                <option value="Kiemelt">Kiemelt</option>
-                <option value="Prémium">Prémium</option>
-              </select>
-            </label>
-          </div>
-          <div class="grid-2">
-            <label>
-              <span>Indulási hely</span>
-              <input id="tripOrigin" name="origin" type="text" placeholder="pl. Budapest" required />
-            </label>
-            <label>
-              <span>Érkezési hely</span>
-              <input id="tripDestination" name="destination" type="text" placeholder="pl. Győr" required />
-            </label>
-          </div>
-          <div class="grid-3">
-            <label>
-              <span>Dátum</span>
-              <input name="date" type="date" required />
-            </label>
-            <label>
-              <span>Indulás időpontja</span>
-              <input name="time" type="time" required />
-            </label>
-            <label>
-              <span>Szabad helyek</span>
-              <input name="seats" type="number" min="1" max="8" value="3" required />
-            </label>
-          </div>
-          <div class="grid-2">
-            <label>
-              <span>Ár / fő (Ft)</span>
-              <input name="price" type="number" min="0" step="100" placeholder="pl. 4500" required />
-            </label>
-            <label>
-              <span>Státusz</span>
-              <input type="text" value="Függőben (automatikus)" disabled />
-            </label>
-          </div>
-          <label>
-            <span>Megjegyzés</span>
-            <textarea name="note" rows="5" placeholder="pl. kisebb csomag elfér, telefonos egyeztetés szükséges"></textarea>
-          </label>
-          <label class="checkbox-row">
-            <input name="termsAccepted" type="checkbox" required />
-            <span>Elfogadom a feltételeket és hozzájárulok az adatok kezeléséhez.</span>
-          </label>
-          <div class="form-actions-row">
-            <button type="submit" class="btn btn-primary">Fuvar beküldése</button>
-            <button type="button" class="btn btn-secondary" id="previewRouteBtn">Térkép előnézet</button>
-          </div>
-          <p id="tripFormMessage" class="form-message"></p>
-        </form>
-      </div>
-
-      <aside class="card glass-glow map-card sticky-card">
-        <span class="eyebrow">OpenStreetMap</span>
-        <h2>Útvonal előnézet</h2>
-        <div id="tripPreviewMap" class="map-view"></div>
-        <p id="tripPreviewStatus" class="muted map-status">Írd be az indulási és érkezési helyet, majd kattints a térkép előnézet gombra.</p>
-      </aside>
+          <div class="small-help" style="margin-top:8px">A Barion fizetés szerveroldali kulcs beállítása után aktiválható.</div>
+        </div>
+        <label><span>Megjegyzés</span><textarea name="note" placeholder="pl. kisebb csomag elfér, megállás megbeszélés szerint"></textarea></label>
+        <div class="form-message" id="tripFormMsg"></div>
+        <button class="btn btn-primary" type="submit">Fuvar beküldése</button>
+      </form>
     </div>
   </main>
-
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="app.js"></script>
-  <script src="auth.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="js/config.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
