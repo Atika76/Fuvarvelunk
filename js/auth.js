@@ -1,6 +1,19 @@
 
 window.AppAuth = (() => {
   let sessionCache = null;
+  let adminEmailCache = null;
+
+  async function getAdminEmail() {
+    if (adminEmailCache) return adminEmailCache;
+    try {
+      const { data } = await sb.from('beallitasok').select('admin_email').eq('id', 1).maybeSingle();
+      adminEmailCache = (data?.admin_email || APP_CONFIG.adminEmail || '').toLowerCase();
+      return adminEmailCache;
+    } catch (_) {
+      adminEmailCache = (APP_CONFIG.adminEmail || '').toLowerCase();
+      return adminEmailCache;
+    }
+  }
 
   async function getSession() {
     const { data, error } = await sb.auth.getSession();
@@ -17,7 +30,8 @@ window.AppAuth = (() => {
 
   async function isAdmin() {
     const user = await getUser();
-    return !!user && user.email?.toLowerCase() === APP_CONFIG.adminEmail.toLowerCase();
+    const adminEmail = await getAdminEmail();
+    return !!user && !!adminEmail && user.email?.toLowerCase() === adminEmail;
   }
 
   function saveNext(url) {
@@ -90,11 +104,13 @@ window.AppAuth = (() => {
     sessionCache = session || null;
     await updateNav();
     if (event === 'SIGNED_IN' && location.pathname.endsWith('auth.html')) {
-      setTimeout(() => {
-        location.href = consumeNext((session?.user?.email || '').toLowerCase() === APP_CONFIG.adminEmail.toLowerCase() ? 'admin.html' : 'index.html');
+      setTimeout(async () => {
+        const adminEmail = await getAdminEmail();
+        const target = ((session?.user?.email || '').toLowerCase() === adminEmail) ? 'admin.html' : consumeNext('index.html');
+        location.href = target;
       }, 300);
     }
   });
 
-  return { getSession, getUser, isAdmin, requireAuth, requireAdmin, signOut, signIn, signUp, updateNav, saveNext, consumeNext };
+  return { getSession, getUser, isAdmin, requireAuth, requireAdmin, signOut, signIn, signUp, updateNav, saveNext, consumeNext, getAdminEmail };
 })();

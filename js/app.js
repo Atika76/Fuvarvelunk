@@ -454,7 +454,13 @@ const App = (() => {
       const msg = document.getElementById('loginMsg');
       msg.textContent = 'Belépés...';
       const { error } = await AppAuth.signIn(fd.get('email'), fd.get('password'));
-      msg.textContent = error ? (error.message || 'Nem sikerült a belépés.') : 'Sikeres belépés...';
+      if (error) {
+        msg.textContent = error.message || 'Nem sikerült a belépés.';
+      } else {
+        msg.textContent = 'Sikeres belépés...';
+        const admin = await AppAuth.isAdmin();
+        location.href = admin ? 'admin.html' : AppAuth.consumeNext('index.html');
+      }
     });
     registerForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -491,6 +497,7 @@ const App = (() => {
           site_name: fd.get('siteName'), company_name: fd.get('companyName'), contact_email: fd.get('email'),
           contact_phone: fd.get('phone'), city: fd.get('city'), admin_email: fd.get('adminEmail'), description: fd.get('description')
         };
+        try { APP_CONFIG.adminEmail = String(fd.get('adminEmail') || APP_CONFIG.adminEmail); } catch (_) {}
         const { error } = await sb.from(tableSettings).upsert(payload, { onConflict:'id' });
         msg.textContent = error ? 'Nem sikerült menteni.' : 'Mentve.';
       });
