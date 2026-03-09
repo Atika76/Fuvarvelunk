@@ -20,6 +20,15 @@ async function getCurrentUser() {
   return data.user || null;
 }
 
+let authReady = false;
+let isLoggingOut = false;
+
+function markAuthReady() {
+  if (authReady) return;
+  authReady = true;
+  document.body.classList.add('auth-ready');
+}
+
 async function updateNavigationByAuth() {
   const session = await getAuthSession();
   const email = session?.user?.email || '';
@@ -32,26 +41,42 @@ async function updateNavigationByAuth() {
   document.querySelectorAll('[data-admin-email-display]').forEach((el) => { el.textContent = ADMIN_EMAIL; });
   document.querySelectorAll('[data-logout-button]').forEach((btn) => {
     btn.onclick = async () => {
-      await supabaseClient.auth.signOut();
-      window.location.href = 'index.html';
+      if (isLoggingOut) return;
+      isLoggingOut = true;
+      try {
+        await supabaseClient.auth.signOut({ scope: 'local' });
+      } catch (error) {
+        console.warn('Kijelentkezési hiba:', error);
+      }
+      window.location.replace('index.html');
     };
   });
+
+  markAuthReady();
   return { session, email, isAdmin };
 }
 
 async function requireAdminAccess() {
   const state = await updateNavigationByAuth();
-  if (!state.isAdmin) {
-    window.location.href = 'belepes.html?next=admin';
-    return false;
+  if (state.isAdmin) return true;
+
+  if (state.session) {
+    window.location.replace('index.html?admin=denied');
+  } else {
+    window.location.replace('belepes.html?next=admin');
   }
-  return true;
+  return false;
 }
 
-function getRedirectAfterLogin() {
+async function getRedirectAfterLogin() {
   const params = new URLSearchParams(window.location.search);
   const next = params.get('next');
-  if (next === 'admin') return 'admin.html';
+  const session = await getAuthSession();
+  const email = session?.user?.email || '';
+
+  if (next === 'admin') {
+    return isAdminEmail(email) ? 'admin.html' : 'index.html?admin=denied';
+  }
   return 'index.html';
 }
 
@@ -67,7 +92,7 @@ async function initAuthPage() {
   let mode = 'signin';
   const existing = await getAuthSession();
   if (existing) {
-    window.location.href = getRedirectAfterLogin();
+    window.location.replace(await getRedirectAfterLogin());
     return;
   }
 
@@ -102,13 +127,14 @@ async function initAuthPage() {
 
     try {
       if (mode === 'signup') {
+        const basePath = `${window.location.origin}${window.location.pathname.replace(/[^/]+$/, '')}`;
         const { error } = await supabaseClient.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${window.location.origin}${window.location.pathname.replace(/[^/]+$/, '')}belepes.html` }
+          options: { emailRedirectTo: `${basePath}belepes.html` }
         });
         if (error) throw error;
-        message.textContent = 'A regisztráció elkészült. Ha kapsz megerősítő e-mailt, nyisd meg, utána már be tudsz lépni.';
+        message.textContent = 'A regisztráció elkészült. Nyisd meg a megerősítő e-mailt, utána be tudsz lépni.';
         mode = 'signin';
         renderMode();
         return;
@@ -116,7 +142,7 @@ async function initAuthPage() {
 
       const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      window.location.href = getRedirectAfterLogin();
+      window.location.replace(await getRedirectAfterLogin());
     } catch (error) {
       const safe = String(error?.message || 'Sikertelen művelet.');
       if (safe.toLowerCase().includes('email not confirmed')) {
@@ -132,15 +158,21 @@ async function initAuthPage() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   await updateNavigationByAuth();
+
   if (document.body.hasAttribute('data-require-admin')) {
     const allowed = await requireAdminAccess();
     if (!allowed) return;
   }
+
   if (document.body.hasAttribute('data-auth-page')) {
     await initAuthPage();
   }
 
-  supabaseClient?.auth?.onAuthStateChange(async () => {
+  supabaseClient?.auth?.onAuthStateChange(async (event) => {
+    if (event === 'SIGNED_OUT') {
+      document.body.classList.remove('auth-ready');
+      authReady = false;
+    }
     await updateNavigationByAuth();
   });
 });
