@@ -1,147 +1,234 @@
 window.AppAuth = (() => {
-  let sessionCache = null;
-  let adminEmailCache = null;
+  let cachedAdminEmail = null;
 
-  async function getAdminEmail(force = false) {
-    if (adminEmailCache && !force) return adminEmailCache;
+  function setNext(url) {
+    try { sessionStorage.setItem('uv_next', url || 'index.html'); } catch(_) {}
+  }
+
+  function consumeNext(fallback='index.html') {
     try {
-      const { data } = await sb.from('beallitasok').select('admin_email').order('id', { ascending: true }).limit(1).maybeSingle();
-      adminEmailCache = (data?.admin_email || APP_CONFIG.adminEmail || '').toLowerCase();
-    } catch (_) {
-      adminEmailCache = (APP_CONFIG.adminEmail || '').toLowerCase();
-    }
-    return adminEmailCache;
+      const v = sessionStorage.getItem('uv_next');
+      sessionStorage.removeItem('uv_next');
+      return v || fallback;
+    } catch(_) { return fallback; }
   }
 
   async function getSession() {
-    const { data, error } = await sb.auth.getSession();
-    if (error) return null;
-    sessionCache = data.session || null;
-    return sessionCache;
+    const { data } = await sb.auth.getSession();
+    return data.session;
   }
 
   async function getUser() {
-    const { data, error } = await sb.auth.getUser();
-    if (error) return null;
-    return data.user || null;
+    const { data } = await sb.auth.getUser();
+    return data.user;
+  }
+
+  async function fetchAdminEmail(force=false) {
+    if (cachedAdminEmail && !force) return cachedAdminEmail;
+    try {
+      const { data } = await sb.from('beallitasok').select('id,admin_email').order('id', { ascending: true }).limit(1).maybeSingle();
+      cachedAdminEmail = data?.admin_email || APP_CONFIG.adminEmail;
+    } catch (_) {
+      cachedAdminEmail = APP_CONFIG.adminEmail;
+    }
+    return cachedAdminEmail;
+  }
+
+  async function isAdmin(email) {
+    const adminEmail = await fetchAdminEmail();
+    const target = email || (await getUser())?.email;
+    return !!target && String(target).toLowerCase() === String(adminEmail).toLowerCase();
   }
 
   function getDisplayName(user) {
-    const md = user?.user_metadata || {};
-    return md.full_name || md.name || (user?.email ? user.email.split('@')[0] : 'Felhasználó');
+    const metaName = user?.user_metadata?.name || user?.user_metadata?.full_name;
+    if (metaName && String(metaName).trim()) return String(metaName).trim();
+    if (user?.email) return String(user.email).split('@')[0];
+    return '';
   }
 
-  async function isAdmin(emailOverride = '') {
-    const user = emailOverride ? { email: emailOverride } : await getUser();
-    const adminEmail = await getAdminEmail();
-    return !!user && !!adminEmail && user.email?.toLowerCase() === adminEmail;
+  function ensureToast() {
+    let box = document.getElementById('authStatusMessage');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'authStatusMessage';
+      box.className = 'auth-status hidden';
+      document.body.appendChild(box);
+    }
+    return box;
   }
 
-  function saveNext(url) {
-    try { sessionStorage.setItem('nextAfterAuth', url); } catch(_) {}
+  function showToast(message) {
+    const box = ensureToast();
+    box.textContent = message;
+    box.classList.remove('hidden');
+    clearTimeout(window.__uvToastTimer);
+    window.__uvToastTimer = setTimeout(() => {
+      box.classList.add('hidden');
+      box.textContent = '';
+    }, 2200);
   }
 
-  function consumeNext(defaultUrl='index.html') {
-    try {
-      const next = sessionStorage.getItem('nextAfterAuth');
-      sessionStorage.removeItem('nextAfterAuth');
-      return next || defaultUrl;
-    } catch(_) { return defaultUrl; }
-  }
-
-  async function requireAuth(next='belepes.html') {
+  async function updateNav() {
     const session = await getSession();
-    if (!session) {
-      saveNext(location.pathname.split('/').pop() + location.search + location.hash);
-      location.href = next;
-      return false;
-    }
-    return true;
-  }
+    const user = session?.user || null;
+    const admin = await isAdmin(user?.email);
 
-  async function requireAdmin() {
-    const ok = await requireAuth('belepes.html');
-    if (!ok) return false;
-    const admin = await isAdmin();
-    if (!admin) {
-      location.href = 'index.html';
-      return false;
-    }
-    return true;
-  }
-
-  async function signOut() {
-    try { await sb.auth.signOut(); } catch (_) {}
-    sessionCache = null;
-    document.querySelectorAll('[data-auth="guest"]').forEach(el => el.classList.remove('hidden'));
-    document.querySelectorAll('[data-auth="user"]').forEach(el => el.classList.add('hidden'));
-    document.querySelectorAll('[data-auth="admin"]').forEach(el => el.classList.add('hidden'));
-    document.querySelectorAll('[data-user-name]').forEach(el => { el.textContent = ''; el.classList.add('hidden'); });
-    location.replace('index.html?logout=1');
+    document.querySelectorAll('[data-auth="guest"]').forEach(el => {
+      el.classList.toggle('hidden', !!user);
+    });
+    document.querySelectorAll('[data-auth="user"]').forEach(el => {
+      el.classList.toggle('hidden', !user);
+    });
+    document.querySelectorAll('[data-auth="admin"]').forEach(el => {
+      el.classList.toggle('hidden', !admin);
+    });
+    document.querySelectorAll('[data-user-label]').forEach(el => {
+      if (!user) {
+        el.textContent = '';
+        el.classList.add('hidden');
+        return;
+      }
+      el.textContent = admin ? 'Admin' : getDisplayName(user);
+      el.classList.remove('hidden');
+    });
+    return { session, user, admin };
   }
 
   async function signIn(email, password) {
     return sb.auth.signInWithPassword({ email, password });
   }
 
-  async function signUp(email, password, fullName='') {
+  async function signUp(email, password, name='') {
     return sb.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: APP_CONFIG.siteUrl + 'belepes.html',
-        data: { full_name: fullName, name: fullName }
+        data: { name },
+        emailRedirectTo: APP_CONFIG.siteUrl + 'belepes.html'
       }
     });
   }
 
-  function showLogoutMessage() {
-    const params = new URLSearchParams(location.search);
-    if (params.get('logout') !== '1') return;
-    const box = document.createElement('div');
-    box.className = 'container';
-    box.innerHTML = '<div class="notice good" style="margin-top:18px">Sikeres kijelentkezés.</div>';
-    const main = document.querySelector('main');
-    if (main && main.parentNode) main.parentNode.insertBefore(box, main);
-    params.delete('logout');
-    const qs = params.toString();
-    history.replaceState({}, '', location.pathname + (qs ? '?' + qs : ''));
+  async function signInWithFacebook() {
+    return sb.auth.signInWithOAuth({
+      provider: 'facebook',
+      options: { redirectTo: APP_CONFIG.siteUrl + 'belepes.html' }
+    });
   }
 
-  async function updateNav() {
+  async function logout() {
+    try { await sb.auth.signOut(); } catch (err) { console.error('Kilépési hiba:', err); }
+    try {
+      sessionStorage.removeItem('uv_next');
+      sessionStorage.setItem('uv_logout_notice', 'Sikeres kijelentkezés.');
+    } catch(_) {}
+
+    document.querySelectorAll('[data-auth="guest"]').forEach(el => el.classList.remove('hidden'));
+    document.querySelectorAll('[data-auth="user"]').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('[data-auth="admin"]').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('[data-user-label]').forEach(el => {
+      el.textContent = '';
+      el.classList.add('hidden');
+    });
+
+    const target = (APP_CONFIG.siteUrl || './') + 'index.html?logout=1&ts=' + Date.now();
+    window.location.replace(target);
+  }
+
+  async function requireAuth(next='index.html') {
     const session = await getSession();
-    const user = session?.user || null;
-    const admin = user ? await isAdmin(user.email) : false;
-    document.querySelectorAll('[data-auth="guest"]').forEach(el => el.classList.toggle('hidden', !!user));
-    document.querySelectorAll('[data-auth="user"]').forEach(el => el.classList.toggle('hidden', !user || admin && el.hasAttribute('data-user-name')));
-    document.querySelectorAll('[data-auth="admin"]').forEach(el => el.classList.toggle('hidden', !admin));
-    document.querySelectorAll('[data-user-name]').forEach(el => {
-      if (user && !admin) {
-        el.textContent = getDisplayName(user);
-        el.classList.remove('hidden');
-      } else {
-        el.textContent = '';
-        el.classList.add('hidden');
-      }
-    });
-    document.querySelectorAll('[data-logout]').forEach(el => {
-      el.onclick = async (e) => { e.preventDefault(); await signOut(); };
-    });
-    return { session, admin, user };
+    if (session?.user) return true;
+    setNext(next || location.pathname.split('/').pop() || 'index.html');
+    location.href = 'belepes.html';
+    return false;
   }
 
-  sb.auth.onAuthStateChange(async (event, session) => {
-    sessionCache = session || null;
-    await updateNav();
-    if (event === 'SIGNED_IN' && location.pathname.endsWith('belepes.html')) {
-      setTimeout(async () => {
-        const target = (await isAdmin(session?.user?.email || '')) ? 'admin.html' : consumeNext('index.html');
-        location.href = target;
-      }, 250);
+  async function requireAdmin() {
+    const session = await getSession();
+    if (!session?.user) {
+      setNext('admin.html');
+      location.href = 'belepes.html';
+      return false;
     }
-  });
+    if (!await isAdmin(session.user.email)) {
+      location.href = 'index.html';
+      return false;
+    }
+    return true;
+  }
 
-  document.addEventListener('DOMContentLoaded', () => { showLogoutMessage(); });
+  function bindLogout() {
+    document.querySelectorAll('[data-logout]').forEach(el => {
+      el.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        await logout();
+        return false;
+      });
+    });
+  }
 
-  return { getSession, getUser, isAdmin, requireAuth, requireAdmin, signOut, signIn, signUp, updateNav, saveNext, consumeNext, getAdminEmail, getDisplayName };
+  function bindFacebookLogin() {
+    const btn = document.getElementById('facebookLoginBtn');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const loginMsg = document.getElementById('loginMsg');
+      if (loginMsg) loginMsg.textContent = 'Facebook belépés indítása...';
+      try {
+        await signInWithFacebook();
+      } catch (err) {
+        console.error('Facebook belépési hiba:', err);
+        if (loginMsg) loginMsg.textContent = 'Nem sikerült a Facebook belépés.';
+      }
+    });
+  }
+
+  function watchAuth() {
+    sb.auth.onAuthStateChange(async () => {
+      await updateNav();
+    });
+  }
+
+  function showLogoutMessageIfNeeded() {
+    try {
+      const url = new URL(window.location.href);
+      const msg = sessionStorage.getItem('uv_logout_notice');
+      if (url.searchParams.get('logout') === '1' || msg) {
+        showToast(msg || 'Sikeres kijelentkezés.');
+        sessionStorage.removeItem('uv_logout_notice');
+        url.searchParams.delete('logout');
+        const q = url.searchParams.toString();
+        history.replaceState({}, '', url.pathname + (q ? '?' + q : '') + url.hash);
+      }
+    } catch(_) {}
+  }
+
+  return {
+    getSession,
+    getUser,
+    updateNav,
+    signIn,
+    signUp,
+    signInWithFacebook,
+    logout,
+    requireAuth,
+    requireAdmin,
+    isAdmin,
+    fetchAdminEmail,
+    bindLogout,
+    bindFacebookLogin,
+    watchAuth,
+    setNext,
+    consumeNext,
+    showLogoutMessageIfNeeded
+  };
 })();
+
+document.addEventListener('DOMContentLoaded', async () => {
+  try { await AppAuth.updateNav(); } catch(_) {}
+  AppAuth.bindLogout();
+  AppAuth.bindFacebookLogin();
+  AppAuth.watchAuth();
+  AppAuth.showLogoutMessageIfNeeded();
+});
