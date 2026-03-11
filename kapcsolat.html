@@ -1,4 +1,83 @@
-<!DOCTYPE html><html lang="hu"><head><meta charset="UTF-8"><meta name="description" content="Utazz Velünk – modern fuvarmegosztó oldal utasoknak és sofőröknek, közvetlen kapcsolatfelvétellel és egyszerű foglalással."><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="icon" type="image/svg+xml" href="assets/favicon.svg"><link rel="stylesheet" href="styles.css"><title>Kapcsolat – Utazz Velünk</title></head><body>
-<header class="site-header"><div class="container nav"><a class="logo-wrap" href="index.html"><img src="assets/logo-utazzvelem.svg" alt="Utazz Velünk"><span data-brand>Utazz Velünk</span></a><nav><a href="index.html">Főoldal</a><a href="fuvarok.html">Fuvarok</a><a href="fuvar-feladas.html">Fuvar feladása</a><a href="kapcsolat.html">Kapcsolat</a><a href="belepes.html" data-auth="guest">Belépés / regisztráció</a><span data-user-label data-auth="user" class="nav-user hidden"></span><a href="admin.html" data-auth="admin" class="hidden">Admin</a><button type="button" data-auth="user" data-logout class="hidden">Kilépés</button></nav></div></header>
-<main class="section"><div class="container two-col"><section class="card"><span class="eyebrow">Kapcsolat</span><h1 class="page-title">Kapcsolati adatok</h1><p class="lead">Kérdésed van vagy fuvarral kapcsolatban érdeklődnél? Vedd fel velünk a kapcsolatot.</p><p><strong>Szolgáltató:</strong> <span data-setting="companyName"></span></p><p><strong>E-mail:</strong> <span data-setting="email"></span></p><p><strong>Telefon:</strong> <span data-setting="phone"></span></p><p><strong>Város / telephely:</strong> <span data-setting="city"></span></p></section><section class="card"><span class="eyebrow">Üzenetküldés</span><h2 style="font-size:2.2rem;margin:10px 0 12px">Írj nekünk</h2><form id="contactForm" class="form-stack"><label><span>Név</span><input name="name" required></label><label><span>E-mail</span><input name="email" type="email" required></label><label><span>Üzenet</span><textarea name="message" required></textarea></label><button class="btn btn-primary" type="submit">Üzenet küldése</button></form></section></div></main>
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script><script defer src="js/config.js"></script><script defer src="js/supabase-client.js"></script><script defer src="js/auth.js"></script><script defer src="js/app.js"></script></body></html>
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="Fuvarozz Velünk – modern fuvarmegosztó oldal utasoknak és sofőröknek, közvetlen kapcsolatfelvétellel és egyszerű foglalással.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <title>Kapcsolat – Fuvarozz Velünk</title>
+</head>
+<body>
+<header class="site-header">
+  <div class="container nav">
+    <a class="logo-wrap" href="index.html"><img src="assets/logo-utazzvelem.svg" alt="Fuvarozz Velünk"><span data-brand>Fuvarozz Velünk</span></a>
+    <nav>
+      <a href="index.html">Főoldal</a>
+      <a href="fuvarok.html">Fuvarok</a>
+      <a href="fuvar-feladas.html">Fuvar feladása</a>
+      <a href="kapcsolat.html">Kapcsolat</a>
+      <a href="belepes.html" data-auth="guest">Belépés / regisztráció</a>
+      <span data-user-label data-auth="user" class="nav-user hidden"></span>
+      <a href="admin.html" data-auth="admin" class="hidden">Admin</a>
+      <button type="button" data-auth="user" data-logout class="hidden">Kilépés</button>
+    </nav>
+  </div>
+</header>
+<main class="section">
+  <div class="container two-col">
+    <section class="card">
+      <span class="eyebrow">Kapcsolat</span>
+      <h1 class="page-title">Kapcsolati adatok</h1>
+      <p class="lead">Kérdésed van vagy fuvarral kapcsolatban érdeklődnél? Vedd fel velünk a kapcsolatot.</p>
+      <p><strong>Szolgáltató:</strong> <span data-setting="companyName"></span></p>
+      <p><strong>E-mail:</strong> <span data-setting="email"></span></p>
+      <p><strong>Telefon:</strong> <span data-setting="phone"></span></p>
+      <p><strong>Város / telephely:</strong> <span data-setting="city"></span></p>
+      <div id="driverQuestionInfo" class="notice hidden" style="margin-top:18px"></div>
+    </section>
+
+    <section class="card">
+      <span class="eyebrow">Üzenetküldés</span>
+      <h2 style="font-size:2.2rem;margin:10px 0 12px">Írj nekünk</h2>
+      <form id="contactForm" class="form-stack">
+        <label><span>Név</span><input name="name" required></label>
+        <label><span>E-mail</span><input name="email" type="email" required></label>
+        <label><span>Üzenet</span><textarea name="message" required></textarea></label>
+        <div class="form-message" id="contactMsg"></div>
+        <button class="btn btn-primary" type="submit">Üzenet küldése</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="container" style="margin-top:28px">
+    <section class="card">
+      <span class="eyebrow">Sofőr kérdezése</span>
+      <h2 style="font-size:2rem;margin:10px 0 12px">Kérdés a sofőrnek</h2>
+      <p class="lead">Ha be vagy jelentkezve, közvetlenül tudsz kérdést küldeni a kiválasztott sofőrnek a fuvar részleteiről.</p>
+      <form id="driverQuestionForm" class="form-stack">
+        <div class="grid-2">
+          <label><span>Sofőr neve</span><input name="driverName" readonly placeholder="A fuvar oldaláról érkezve automatikusan kitöltődik"></label>
+          <label><span>Sofőr e-mail</span><input name="driverEmail" type="email" readonly placeholder="A fuvar oldaláról érkezve automatikusan kitöltődik"></label>
+        </div>
+        <div class="grid-2">
+          <label><span>Saját név</span><input name="name" required></label>
+          <label><span>Saját e-mail</span><input name="email" type="email" required></label>
+        </div>
+        <label><span>Kérdésed</span><textarea name="message" required placeholder="pl. Van még hely csomagnak? Pontosan honnan indul a fuvar?"></textarea></label>
+        <input type="hidden" name="tripId">
+        <div class="notice warn">Ez a kérdés közvetlenül a sofőr e-mail címére készül elő. A funkció bejelentkezett felhasználóknak készült.</div>
+        <div class="form-message" id="driverQuestionMsg"></div>
+        <button class="btn btn-primary" type="submit">Kérdés küldése a sofőrnek</button>
+      </form>
+    </section>
+  </div>
+</main>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script defer src="js/config.js"></script>
+<script defer src="js/supabase-client.js"></script>
+<script defer src="js/auth.js"></script>
+<script defer src="js/app.js"></script>
+</body>
+</html>

@@ -26,13 +26,7 @@ window.AppAuth = (() => {
   async function fetchAdminEmail(force=false) {
     if (cachedAdminEmail && !force) return cachedAdminEmail;
     try {
-      const { data } = await sb
-        .from('beallitasok')
-        .select('id,admin_email')
-        .order('id', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
+      const { data } = await sb.from('beallitasok').select('id,admin_email').order('id', { ascending: true }).limit(1).maybeSingle();
       cachedAdminEmail = data?.admin_email || APP_CONFIG.adminEmail;
     } catch (_) {
       cachedAdminEmail = APP_CONFIG.adminEmail;
@@ -68,7 +62,6 @@ window.AppAuth = (() => {
     const box = ensureToast();
     box.textContent = message;
     box.classList.remove('hidden');
-
     clearTimeout(window.__uvToastTimer);
     window.__uvToastTimer = setTimeout(() => {
       box.classList.add('hidden');
@@ -84,26 +77,21 @@ window.AppAuth = (() => {
     document.querySelectorAll('[data-auth="guest"]').forEach(el => {
       el.classList.toggle('hidden', !!user);
     });
-
     document.querySelectorAll('[data-auth="user"]').forEach(el => {
       el.classList.toggle('hidden', !user);
     });
-
     document.querySelectorAll('[data-auth="admin"]').forEach(el => {
       el.classList.toggle('hidden', !admin);
     });
-
     document.querySelectorAll('[data-user-label]').forEach(el => {
       if (!user) {
         el.textContent = '';
         el.classList.add('hidden');
         return;
       }
-
       el.textContent = admin ? 'Admin' : getDisplayName(user);
       el.classList.remove('hidden');
     });
-
     return { session, user, admin };
   }
 
@@ -130,29 +118,15 @@ window.AppAuth = (() => {
   }
 
   async function logout() {
-    try {
-      await sb.auth.signOut();
-    } catch (err) {
-      console.error('Kilépési hiba:', err);
-    }
-
+    try { await sb.auth.signOut(); } catch (err) { console.error('Kilépési hiba:', err); }
     try {
       sessionStorage.removeItem('uv_next');
       sessionStorage.setItem('uv_logout_notice', 'Sikeres kijelentkezés.');
     } catch(_) {}
 
-    document.querySelectorAll('[data-auth="guest"]').forEach(el => {
-      el.classList.remove('hidden');
-    });
-
-    document.querySelectorAll('[data-auth="user"]').forEach(el => {
-      el.classList.add('hidden');
-    });
-
-    document.querySelectorAll('[data-auth="admin"]').forEach(el => {
-      el.classList.add('hidden');
-    });
-
+    document.querySelectorAll('[data-auth="guest"]').forEach(el => el.classList.remove('hidden'));
+    document.querySelectorAll('[data-auth="user"]').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('[data-auth="admin"]').forEach(el => el.classList.add('hidden'));
     document.querySelectorAll('[data-user-label]').forEach(el => {
       el.textContent = '';
       el.classList.add('hidden');
@@ -165,7 +139,6 @@ window.AppAuth = (() => {
   async function requireAuth(next='index.html') {
     const session = await getSession();
     if (session?.user) return true;
-
     setNext(next || location.pathname.split('/').pop() || 'index.html');
     location.href = 'belepes.html';
     return false;
@@ -173,18 +146,15 @@ window.AppAuth = (() => {
 
   async function requireAdmin() {
     const session = await getSession();
-
     if (!session?.user) {
       setNext('admin.html');
       location.href = 'belepes.html';
       return false;
     }
-
     if (!await isAdmin(session.user.email)) {
       location.href = 'index.html';
       return false;
     }
-
     return true;
   }
 
@@ -202,11 +172,9 @@ window.AppAuth = (() => {
   function bindFacebookLogin() {
     const btn = document.getElementById('facebookLoginBtn');
     if (!btn) return;
-
     btn.addEventListener('click', async () => {
       const loginMsg = document.getElementById('loginMsg');
       if (loginMsg) loginMsg.textContent = 'Facebook belépés indítása...';
-
       try {
         await signInWithFacebook();
       } catch (err) {
@@ -226,11 +194,9 @@ window.AppAuth = (() => {
     try {
       const url = new URL(window.location.href);
       const msg = sessionStorage.getItem('uv_logout_notice');
-
       if (url.searchParams.get('logout') === '1' || msg) {
         showToast(msg || 'Sikeres kijelentkezés.');
         sessionStorage.removeItem('uv_logout_notice');
-
         url.searchParams.delete('logout');
         const q = url.searchParams.toString();
         history.replaceState({}, '', url.pathname + (q ? '?' + q : '') + url.hash);
