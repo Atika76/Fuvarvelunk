@@ -680,6 +680,7 @@ const App = (() => {
     const form = document.getElementById('contactForm');
     const driverForm = document.getElementById('driverQuestionForm');
     const driverSection = document.getElementById('driverQuestionSection');
+    const driverSection = document.getElementById('driverQuestionSection');
     const params = new URLSearchParams(location.search);
 
     if (form) {
@@ -693,6 +694,8 @@ const App = (() => {
     }
 
     if (!driverForm) return;
+    const hasDriverContext = params.get('driverEmail') || params.get('driverName');
+    if (driverSection) driverSection.style.display = hasDriverContext ? '' : 'none';
     if (driverSection) driverSection.style.display = params.get('driverEmail') || params.get('driverName') ? '' : 'none';
 
     const session = await AppAuth.getSession();
@@ -762,3 +765,12 @@ const App = (() => {
 })();
 
 document.addEventListener('DOMContentLoaded', () => { App.init(); });
+
+
+document.addEventListener('DOMContentLoaded', () => {
+  const reviewForm = document.getElementById('reviewForm');
+  if (reviewForm) reviewForm.addEventListener('submit', handleReviewSubmit);
+
+  const bookingForm = document.getElementById('bookingForm');
+  if (bookingForm) bookingForm.addEventListener('submit', handleBookingSubmit);
+});

@@ -1,0 +1,12 @@
+1. GitHubon írd felül az összes fájlt ebből a ZIP-ből.
+2. A supabase-setup.sql TELJES tartalmát futtasd le a Supabase SQL Editorban.
+3. Ezután Ctrl+F5.
+
+Ebben a verzióban:
+- a footerben csak e-mail marad
+- foglalás javítva
+- indulás + érkezés útvonal térkép
+- utazás után 1-5 csillagos + szöveges értékelés
+- sofőr profil oldal
+- Facebook-poszt kép generátor
+- saját hirdetés törlése

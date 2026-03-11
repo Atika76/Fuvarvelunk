@@ -204,3 +204,15 @@ input:focus,textarea:focus,select:focus{border-color:rgba(102,164,255,.65); box-
 @media (max-width: 860px){
   .driver-profile-card{grid-template-columns:1fr}
 }
+
+
+.driver-profile-card{display:grid;grid-template-columns:120px 1fr;gap:20px;align-items:center}
+.driver-avatar{width:96px;height:96px;border-radius:50%;display:grid;place-items:center;font-size:2rem;font-weight:800;background:rgba(108,160,255,.18);border:1px solid rgba(255,255,255,.12)}
+.driver-meta h2{margin:0 0 8px;font-size:2rem}
+.rating-stars{letter-spacing:3px;color:#ffd56b;font-size:1.15rem}
+.route-map-card{margin-top:18px}
+.route-map-frame{width:100%;min-height:360px;border:0;border-radius:18px;background:#09152b}
+.driver-mini{display:flex;align-items:center;gap:10px;margin-top:10px}
+.driver-mini .driver-avatar{width:44px;height:44px;font-size:1rem}
+.trip-tools{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.hidden{display:none!important}
