@@ -1,6 +1,6 @@
 window.APP_CONFIG = {
-  brandName: 'Fuvarozz Velünk',
-  companyName: 'Fuvarozz Velünk',
+  brandName: 'FuvarVelünk',
+  companyName: 'FuvarVelünk',
   contactEmail: 'info@fuvarvelunk.hu',
   contactPhone: '+36 30 123 4567',
   city: 'Budapest',
