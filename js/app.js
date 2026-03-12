@@ -75,7 +75,9 @@ const App = (() => {
   }
 
   function buildGoogleMapsDirectionsUrl(origin, destination) {
-    return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin || '')}&destination=${encodeURIComponent(destination || '')}&travelmode=driving`;
+    const from = [String(origin || '').trim(), 'Magyarország'].filter(Boolean).join(', ');
+    const to = [String(destination || '').trim(), 'Magyarország'].filter(Boolean).join(', ');
+    return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}&travelmode=driving`;
   }
 
   function shareCanvasDataUrl(trip) {
@@ -261,12 +263,14 @@ const App = (() => {
     if (!APP_CONFIG.notificationFunctionUrl) return false;
     try {
       const adminEmail = await AppAuth.fetchAdminEmail();
-      await fetch(APP_CONFIG.notificationFunctionUrl, {
+      const res = await fetch(APP_CONFIG.notificationFunctionUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind, payload, adminEmail })
       });
-      return true;
+      let data = null;
+      try { data = await res.json(); } catch (_) {}
+      return !!(res.ok && (!data || data.ok !== false));
     } catch (_) {
       return false;
     }
@@ -341,6 +345,29 @@ const App = (() => {
             <button class="btn btn-primary js-book-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}' ${free < 1 ? 'disabled' : ''}>${free < 1 ? 'Betelt' : 'Foglalás'}</button>
             <a class="btn btn-secondary" href="kapcsolat.html?tripId=${trip.id}&driverName=${encodeURIComponent(trip.nev || '')}&driverEmail=${encodeURIComponent(trip.email || '')}">Kérdés a sofőrnek</a>
           `}
+        </div>
+      </article>`;
+  }
+
+
+  function tripListCard(trip) {
+    const { total, free } = seatCounts(trip);
+    const ratingHtml = starRating(trip.sofor_atlag || trip.sofor_ertekeles || 0, trip.sofor_ertekeles_db || 0);
+    const full = free <= 0;
+    return `
+      <article class="card trip-compact" data-trip-id="${trip.id}">
+        <div class="inline-pills"><span class="pill">${escapeHtml(trip.indulas)} → ${escapeHtml(trip.erkezes)}</span>${statusBadge(trip.statusz || 'Jóváhagyva')} ${full ? '<span class="status rejected">BETELT</span>' : ''}</div>
+        <h3>${escapeHtml(trip.indulas)} → ${escapeHtml(trip.erkezes)}</h3>
+        <p class="trip-compact-meta">${escapeHtml(trip.datum || '')} • ${escapeHtml(trip.ido || '')} • ${fmtCurrency(trip.ar)} Ft / fő</p>
+        <div class="driver-mini"><strong>${escapeHtml(trip.nev || '')}</strong><span>${ratingHtml}</span></div>
+        ${seatBar(free, total)}
+        <div class="trip-tools">
+          <a class="btn btn-ghost" href="trip.html?id=${trip.id}">Részletek</a>
+          <button class="btn btn-ghost js-map-focus" data-origin="${escapeHtml(trip.indulas)}" data-destination="${escapeHtml(trip.erkezes)}">Térkép</button>
+          <a class="btn btn-ghost" target="_blank" rel="noopener" href="${buildGoogleMapsDirectionsUrl(trip.indulas, trip.erkezes)}">Google útvonal</a>
+          <button class="btn btn-ghost js-share-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}'>Megosztás</button>
+          <button class="btn btn-primary js-book-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}' ${full ? 'disabled' : ''}>${full ? 'Betelt' : 'Foglalás'}</button>
+          <a class="btn btn-secondary" href="kapcsolat.html?tripId=${trip.id}&driverName=${encodeURIComponent(trip.nev || '')}&driverEmail=${encodeURIComponent(trip.email || '')}">Kérdés a sofőrnek</a>
         </div>
       </article>`;
   }
@@ -421,7 +448,8 @@ const App = (() => {
     if (!payload.nev || !payload.indulas || !payload.erkezes) throw new Error('Tölts ki minden kötelező mezőt.');
     const { error } = await sb.from(tableTrips).insert([payload]);
     if (error) throw error;
-    await sendNotificationMail('uj_fuvar', payload);
+    const mailOk = await sendNotificationMail('uj_fuvar', payload);
+    return mailOk;
   }
 
   async function submitBooking(trip, form) {
@@ -454,8 +482,8 @@ const App = (() => {
     };
     const { error } = await sb.from(tableBookings).insert([booking]);
     if (error) throw error;
-    await sendNotificationMail('uj_foglalas', { ...booking, sofor_email: trip.email, sofor_nev: trip.nev });
-    return booking;
+    const mailOk = await sendNotificationMail('uj_foglalas', { ...booking, sofor_email: trip.email, sofor_nev: trip.nev });
+    return { ...booking, __mailOk: mailOk };
   }
 
   async function submitRating(trip, form, tipus) {
@@ -526,8 +554,10 @@ const App = (() => {
           const msg = wrap.querySelector('#bookingMsg');
           msg.textContent = 'Mentés...';
           try {
-            await submitBooking(trip, ev.currentTarget);
-            msg.textContent = 'Foglalás rögzítve. Az admin / sofőr a beállított értesítési csatornán értesülhet.';
+            const booking = await submitBooking(trip, ev.currentTarget);
+            msg.textContent = booking.__mailOk
+              ? 'Foglalás rögzítve. Az e-mail értesítés is sikeresen elindult.'
+              : 'Foglalás rögzítve, de az e-mail értesítés nem ment ki. Ellenőrizd a Supabase Edge Function logokat és a Resend beállításokat.';
             setTimeout(() => location.reload(), 900);
           } catch (err) {
             msg.textContent = err.message || 'Nem sikerült a foglalás.';
@@ -604,12 +634,12 @@ const App = (() => {
       try {
         const filters = { origin: originInput.value.trim(), destination: destinationInput.value.trim(), date: dateInput.value };
         const trips = await enrichTripsWithRatings(await fetchApprovedTrips(filters));
-        list.innerHTML = trips.length ? trips.map(t => tripCard(t, false)).join('') : '<div class="empty-state">Nincs a keresésnek megfelelő fuvar.</div>';
+        list.innerHTML = trips.length ? trips.map(t => tripListCard(t)).join('') : '<div class="empty-state">Nincs a keresésnek megfelelő fuvar.</div>';
         if (trips[0]) await focusRoute(trips[0].indulas, trips[0].erkezes);
         if (!trips.length && recWrap) {
           const all = await enrichTripsWithRatings(await fetchApprovedTrips({}));
           const rec = buildRecommendations(all, filters);
-          recWrap.innerHTML = rec.length ? `<h3>Ajánlott fuvarok</h3>${rec.map(t => tripCard(t, false)).join('')}` : '';
+          recWrap.innerHTML = rec.length ? `<h3>Ajánlott fuvarok</h3><div class="trip-list-grid">${rec.map(t => tripListCard(t)).join('')}</div>` : '';
         }
       } catch (_) {
         list.innerHTML = '<div class="empty-state">A fuvarok jelenleg nem tölthetők be.</div>';
@@ -646,10 +676,12 @@ const App = (() => {
       const msg = document.getElementById('tripFormMsg');
       msg.textContent = 'Mentés...';
       try {
-        await submitTrip(form);
-        msg.textContent = APP_CONFIG.notificationFunctionUrl
-          ? 'A fuvar rögzítve lett. E-mail értesítés is elindult az adminnak.'
-          : 'A fuvar rögzítve lett. Admin jóváhagyás után megjelenik a listában.';
+        const mailOk = await submitTrip(form);
+        msg.textContent = !APP_CONFIG.notificationFunctionUrl
+          ? 'A fuvar rögzítve lett. Admin jóváhagyás után megjelenik a listában.'
+          : (mailOk
+              ? 'A fuvar rögzítve lett. Az admin e-mail értesítés is sikeresen elindult.'
+              : 'A fuvar rögzítve lett, de az e-mail értesítés nem ment ki. Ellenőrizd a Supabase Edge Function logokat és a Resend beállításokat.');
         form.reset();
         form.querySelector('[name="contactEmail"]').value = user?.email || '';
       } catch (err) {

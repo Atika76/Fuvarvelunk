@@ -41,7 +41,10 @@ serve(async (req) => {
     })
 
     const data = await resend.text()
-    return new Response(JSON.stringify({ ok: resend.ok, data }), { headers: { 'Content-Type': 'application/json', ...cors } })
+    if (!resend.ok) {
+      return new Response(JSON.stringify({ ok: false, data }), { status: 500, headers: { 'Content-Type': 'application/json', ...cors } })
+    }
+    return new Response(JSON.stringify({ ok: true, data }), { headers: { 'Content-Type': 'application/json', ...cors } })
   } catch (error) {
     return new Response(JSON.stringify({ ok: false, error: String(error) }), { status: 500, headers: { 'Content-Type': 'application/json', ...cors } })
   }
