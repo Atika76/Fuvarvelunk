@@ -1,8 +1,6 @@
 window.AppAuth = (() => {
   let cachedAdminEmail = null;
-  let cachedRole = null;
-  const ADMIN_CACHE_KEY = 'fv_admin_email_cache_v1';
-  const ADMIN_CACHE_TTL = 10 * 60 * 1000;
+  const ADMIN_CACHE_KEY = 'fv_admin_email_cache';
 
   function setNext(url) {
     try { sessionStorage.setItem('uv_next', url || 'index.html'); } catch(_) {}
@@ -26,58 +24,31 @@ window.AppAuth = (() => {
     return data.user;
   }
 
-  function readCachedAdminEmail() {
-    if (cachedAdminEmail) return cachedAdminEmail;
-    try {
-      const raw = localStorage.getItem(ADMIN_CACHE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed?.email || !parsed?.ts) return null;
-      if (Date.now() - Number(parsed.ts) > ADMIN_CACHE_TTL) return null;
-      cachedAdminEmail = parsed.email;
-      return cachedAdminEmail;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  function writeCachedAdminEmail(email) {
-    cachedAdminEmail = email || APP_CONFIG.adminEmail;
-    try {
-      localStorage.setItem(ADMIN_CACHE_KEY, JSON.stringify({ email: cachedAdminEmail, ts: Date.now() }));
-    } catch (_) {}
-    return cachedAdminEmail;
-  }
-
   async function fetchAdminEmail(force=false) {
+    if (cachedAdminEmail && !force) return cachedAdminEmail;
     if (!force) {
-      const cached = readCachedAdminEmail();
-      if (cached) return cached;
+      try {
+        const cached = sessionStorage.getItem(ADMIN_CACHE_KEY);
+        if (cached) {
+          cachedAdminEmail = cached;
+          return cachedAdminEmail;
+        }
+      } catch(_) {}
     }
     try {
       const { data } = await sb.from('beallitasok').select('id,admin_email').order('id', { ascending: true }).limit(1).maybeSingle();
-      return writeCachedAdminEmail(data?.admin_email || APP_CONFIG.adminEmail);
+      cachedAdminEmail = data?.admin_email || APP_CONFIG.adminEmail;
     } catch (_) {
-      return writeCachedAdminEmail(APP_CONFIG.adminEmail);
+      cachedAdminEmail = APP_CONFIG.adminEmail;
     }
-  }
-
-  function isAdminEmail(email, adminEmail) {
-    return !!email && String(email).toLowerCase() === String(adminEmail || APP_CONFIG.adminEmail).toLowerCase();
+    try { sessionStorage.setItem(ADMIN_CACHE_KEY, cachedAdminEmail); } catch(_) {}
+    return cachedAdminEmail;
   }
 
   async function isAdmin(email) {
+    const adminEmail = await fetchAdminEmail();
     const target = email || (await getUser())?.email;
-    const adminEmail = readCachedAdminEmail() || await fetchAdminEmail();
-    return isAdminEmail(target, adminEmail);
-  }
-
-  async function resolveRole(user) {
-    if (!user?.email) return { admin: false, adminEmail: readCachedAdminEmail() || APP_CONFIG.adminEmail };
-    const adminEmail = readCachedAdminEmail() || await fetchAdminEmail();
-    const admin = isAdminEmail(user.email, adminEmail);
-    cachedRole = admin ? 'admin' : 'user';
-    return { admin, adminEmail };
+    return !!target && String(target).toLowerCase() === String(adminEmail).toLowerCase();
   }
 
   function getDisplayName(user) {
@@ -109,10 +80,10 @@ window.AppAuth = (() => {
     }, 2200);
   }
 
-  async function updateNav(sessionOverride = null) {
-    const session = sessionOverride || await getSession();
+  async function updateNav() {
+    const session = await getSession();
     const user = session?.user || null;
-    const { admin } = await resolveRole(user);
+    const admin = await isAdmin(user?.email);
 
     document.querySelectorAll('[data-auth="guest"]').forEach(el => {
       el.classList.toggle('hidden', !!user);
@@ -141,10 +112,7 @@ window.AppAuth = (() => {
   }
 
   async function signIn(email, password) {
-    const result = await sb.auth.signInWithPassword({ email, password });
-    const user = result?.data?.user || result?.data?.session?.user || null;
-    if (user?.email) await resolveRole(user);
-    return result;
+    return sb.auth.signInWithPassword({ email, password });
   }
 
   async function signUp(email, password, name='') {
@@ -179,7 +147,6 @@ window.AppAuth = (() => {
       sessionStorage.removeItem('uv_next');
       sessionStorage.setItem('uv_logout_notice', 'Sikeres kijelentkezés.');
     } catch(_) {}
-    cachedRole = null;
 
     document.querySelectorAll('[data-auth="guest"]').forEach(el => el.classList.remove('hidden'));
     document.querySelectorAll('[data-auth="user"]').forEach(el => el.classList.add('hidden'));
@@ -189,7 +156,8 @@ window.AppAuth = (() => {
       el.classList.add('hidden');
     });
 
-    window.location.replace('index.html');
+    const target = (APP_CONFIG.siteUrl || './') + 'index.html';
+    window.location.replace(target);
   }
 
   async function requireAuth(next='index.html') {
@@ -246,17 +214,21 @@ window.AppAuth = (() => {
   }
 
   function watchAuth() {
-    sb.auth.onAuthStateChange(async (_event, session) => {
-      await updateNav(session || null);
+    sb.auth.onAuthStateChange(async () => {
+      await updateNav();
     });
   }
 
   function showLogoutMessageIfNeeded() {
     try {
+      const url = new URL(window.location.href);
       const msg = sessionStorage.getItem('uv_logout_notice');
-      if (msg) {
+      if (url.searchParams.get('logout') === '1' || msg) {
         showToast(msg || 'Sikeres kijelentkezés.');
         sessionStorage.removeItem('uv_logout_notice');
+        url.searchParams.delete('logout');
+        const q = url.searchParams.toString();
+        history.replaceState({}, '', url.pathname + (q ? '?' + q : '') + url.hash);
       }
     } catch(_) {}
   }
@@ -273,7 +245,6 @@ window.AppAuth = (() => {
     requireAdmin,
     isAdmin,
     fetchAdminEmail,
-    resolveRole,
     bindLogout,
     bindFacebookLogin,
     watchAuth,

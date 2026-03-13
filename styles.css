@@ -96,8 +96,9 @@ main{padding-bottom:40px}
 .btn-danger{background:rgba(240,91,122,.16);color:#ffd4de;border:1px solid rgba(240,91,122,.28)}
 .oauth-btn{background:#1877f2;color:#fff}
 
-.cards,.grid-3,.admin-list{display:grid;gap:18px}
+.cards,.grid-3,.grid-4,.admin-list{display:grid;gap:18px}
 .cards,.grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.grid-4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .grid-2,.two-col,.auth-panels,.admin-layout{display:grid;gap:20px}
 .grid-2,.two-col,.auth-panels,.admin-layout{grid-template-columns:repeat(2,minmax(0,1fr))}
 .card{padding:24px}
@@ -141,6 +142,9 @@ input:focus,textarea:focus,select:focus{border-color:rgba(102,164,255,.65); box-
 .status.info{background:rgba(102,164,255,.14);color:#dbe8ff;border-color:rgba(102,164,255,.26)}
 .trip-actions{align-self:center;justify-content:flex-end}
 .trip-actions .btn,.trip-actions a{min-width:120px}
+.check-row{display:flex;align-items:center;gap:10px;min-height:52px}
+.check-row input{width:auto;min-height:auto}
+.filter-actions{display:flex;align-items:end}
 .admin-item{display:grid;grid-template-columns:1.2fr .6fr .5fr;gap:18px}
 .admin-list{margin-top:16px}
 .empty-state{
@@ -169,7 +173,7 @@ input:focus,textarea:focus,select:focus{border-color:rgba(102,164,255,.65); box-
 .modal{width:min(760px, calc(100% - 24px));max-height:min(92vh,900px);overflow:auto}
 
 @media (max-width: 1040px){
-  .hero,.trip-card,.admin-item,.admin-layout,.auth-panels,.two-col,.grid-2,.cards,.grid-3,.footer-grid{grid-template-columns:1fr}
+  .hero,.trip-card,.admin-item,.admin-layout,.auth-panels,.two-col,.grid-2,.cards,.grid-3,.grid-4,.footer-grid{grid-template-columns:1fr}
   .trip-actions{justify-content:flex-start}
 }
 @media (max-width: 720px){
@@ -241,5 +245,4 @@ code{background:rgba(255,255,255,.08);padding:2px 6px;border-radius:8px}
 .ai-help{font-size:.95rem;color:var(--muted);line-height:1.6}
 @media (max-width:640px){.ai-inline-actions{flex-direction:column}.ai-btn{width:100%}}
 
-.admin-tools input{width:100%}
-.admin-trip-filter.active{background:rgba(99,164,255,.18);border-color:rgba(99,164,255,.75);color:var(--text)}
+.full-note{margin-top:8px;color:#ffd5dd;font-weight:700}
