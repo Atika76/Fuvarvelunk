@@ -232,3 +232,11 @@ code{background:rgba(255,255,255,.08);padding:2px 6px;border-radius:8px}
   #tripsList.cards,.trip-list-grid{grid-template-columns:1fr}
   .trip-compact .trip-tools{grid-template-columns:1fr}
 }
+
+.ai-tools{margin-top:14px;display:grid;gap:12px}
+.ai-inline-actions{display:flex;flex-wrap:wrap;gap:10px}
+.ai-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);font-weight:700;cursor:pointer}
+.ai-btn:hover{transform:translateY(-1px);border-color:rgba(255,255,255,.2)}
+.ai-output{width:100%;min-height:120px;padding:14px 16px;border-radius:16px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:#fff;font:inherit;line-height:1.6}
+.ai-help{font-size:.95rem;color:var(--muted);line-height:1.6}
+@media (max-width:640px){.ai-inline-actions{flex-direction:column}.ai-btn{width:100%}}

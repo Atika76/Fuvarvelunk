@@ -120,6 +120,145 @@ const App = (() => {
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
   }
 
+
+  function formatHumanDate(dateValue) {
+    if (!dateValue) return 'hamarosan';
+    try {
+      return new Intl.DateTimeFormat('hu-HU', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(dateValue));
+    } catch (_) {
+      return dateValue;
+    }
+  }
+
+  function generateTripNote(data) {
+    const parts = [];
+    if (data.carType) parts.push(`Az utat egy ${data.carType} autóval vállalom.`);
+    if (data.freeSeats) parts.push(`${data.freeSeats} szabad hely van az autóban.`);
+    parts.push('Pontos indulási helyet és részleteket egyeztetés után küldök.');
+    if (data.paymentText) parts.push(`Fizetés: ${data.paymentText}.`);
+    parts.push('Korrekt, pontos utasokat várok.');
+    return parts.join(' ');
+  }
+
+  function generateTripAdCopy(data) {
+    const when = data.date ? `${formatHumanDate(data.date)}${data.time ? ' ' + data.time : ''}` : 'egyeztetés szerint';
+    const header = `🚗 ${data.origin || 'Indulás'} → ${data.destination || 'Érkezés'} fuvar`;
+    const lines = [
+      header,
+      `📅 Időpont: ${when}`,
+      data.price ? `💰 Ár: ${fmtCurrency(data.price)} Ft / fő` : '',
+      data.freeSeats ? `🪑 Szabad helyek: ${data.freeSeats}` : '',
+      data.carType ? `🚙 Autó: ${data.carType}` : '',
+      data.paymentText ? `💳 Fizetés: ${data.paymentText}` : '',
+      '📩 Foglalás és érdeklődés: FuvarVelünk oldalon keresztül',
+      data.note ? `ℹ️ Megjegyzés: ${data.note}` : ''
+    ].filter(Boolean);
+    return lines.join('\n');
+  }
+
+  function generateDriverQuestion(data) {
+    const tripLine = data.tripSummary ? `${data.tripSummary} kapcsán érdeklődnék.` : 'Az egyik meghirdetett fuvaroddal kapcsolatban érdeklődnék.';
+    return [
+      `Szia ${data.driverName || ''}!`,
+      '',
+      tripLine,
+      'Szeretném megkérdezni, hogy van-e még szabad hely, illetve hol lenne a pontos indulási pont.',
+      'Ha lehetséges, kérlek írd meg azt is, hogy csomagot lehet-e hozni.',
+      '',
+      'Köszönöm előre is!'
+    ].join('\n');
+  }
+
+  function copyTextValue(value, okMsgHost) {
+    if (!value) return;
+    navigator.clipboard?.writeText(value).then(() => {
+      if (okMsgHost) okMsgHost.textContent = 'Kimásolva a vágólapra.';
+    }).catch(() => {
+      if (okMsgHost) okMsgHost.textContent = 'A másolás nem sikerült, jelöld ki kézzel.';
+    });
+  }
+
+  function selectedPaymentText(form) {
+    return Array.from(form.querySelectorAll('input[name="fizetesiMod"]:checked')).map(el => el.parentElement?.textContent?.trim() || '').filter(Boolean).join(', ');
+  }
+
+  function mountTripAiTools(form) {
+    const noteField = form.querySelector('[name="note"]');
+    if (!noteField || document.getElementById('tripAiTools')) return;
+    const host = document.createElement('div');
+    host.id = 'tripAiTools';
+    host.className = 'ai-tools';
+    host.innerHTML = `
+      <div class="card" style="padding:16px 18px">
+        <div class="eyebrow">AI szövegsegéd</div>
+        <p class="ai-help">Egy kattintással készít megjegyzést és Facebook / hirdetési szöveget a fuvar adataiból.</p>
+        <div class="ai-inline-actions">
+          <button type="button" class="ai-btn" id="aiNoteBtn">AI megjegyzés</button>
+          <button type="button" class="ai-btn" id="aiAdBtn">AI hirdetési szöveg</button>
+          <button type="button" class="ai-btn" id="aiCopyAdBtn">Szöveg másolása</button>
+        </div>
+        <label style="display:block;margin-top:12px"><span>Generált hirdetési szöveg</span><textarea id="tripAdCopy" class="ai-output" readonly placeholder="Itt jelenik meg a kész fuvarhirdetés szövege."></textarea></label>
+        <div id="tripAiMsg" class="form-message"></div>
+      </div>`;
+    const gridWrap = noteField.closest('.grid-2') || noteField.parentElement;
+    gridWrap.insertAdjacentElement('afterend', host);
+
+    const readData = () => ({
+      origin: form.querySelector('[name="origin"]')?.value.trim(),
+      destination: form.querySelector('[name="destination"]')?.value.trim(),
+      date: form.querySelector('[name="date"]')?.value,
+      time: form.querySelector('[name="time"]')?.value,
+      price: form.querySelector('[name="price"]')?.value,
+      freeSeats: form.querySelector('[name="szabadHely"]')?.value,
+      carType: form.querySelector('[name="carType"]')?.value.trim(),
+      paymentText: selectedPaymentText(form),
+      note: noteField.value.trim()
+    });
+    const adCopy = host.querySelector('#tripAdCopy');
+    const aiMsg = host.querySelector('#tripAiMsg');
+    host.querySelector('#aiNoteBtn')?.addEventListener('click', () => {
+      const generated = generateTripNote(readData());
+      noteField.value = generated;
+      aiMsg.textContent = 'Megjegyzés kitöltve.';
+    });
+    host.querySelector('#aiAdBtn')?.addEventListener('click', () => {
+      const data = readData();
+      if (!data.origin || !data.destination) {
+        aiMsg.textContent = 'Előbb töltsd ki legalább az indulás és érkezés mezőket.';
+        return;
+      }
+      if (!noteField.value.trim()) noteField.value = generateTripNote(data);
+      adCopy.value = generateTripAdCopy({ ...readData(), note: noteField.value.trim() });
+      aiMsg.textContent = 'Hirdetési szöveg elkészült.';
+    });
+    host.querySelector('#aiCopyAdBtn')?.addEventListener('click', () => copyTextValue(adCopy.value, aiMsg));
+  }
+
+  function mountDriverQuestionAiTools(driverForm) {
+    const messageField = driverForm.querySelector('[name="message"]');
+    if (!messageField || document.getElementById('driverAiTools')) return;
+    const host = document.createElement('div');
+    host.id = 'driverAiTools';
+    host.className = 'ai-tools';
+    host.innerHTML = `
+      <div class="ai-inline-actions">
+        <button type="button" class="ai-btn" id="aiDriverQuestionBtn">AI üzenet javaslat</button>
+        <button type="button" class="ai-btn" id="aiDriverCopyBtn">Üzenet másolása</button>
+      </div>
+      <div id="driverAiMsg" class="form-message"></div>`;
+    messageField.parentElement.insertAdjacentElement('afterend', host);
+    const msgHost = host.querySelector('#driverAiMsg');
+    host.querySelector('#aiDriverQuestionBtn')?.addEventListener('click', () => {
+      const params = new URLSearchParams(location.search);
+      const driverName = driverForm.querySelector('[name="driverName"]')?.value || params.get('driverName') || 'Sofőr';
+      const tripId = driverForm.querySelector('[name="tripId"]')?.value || params.get('tripId') || '';
+      const tripSummary = tripId ? `A ${tripId}. azonosítójú fuvar` : '';
+      messageField.value = generateDriverQuestion({ driverName, tripSummary });
+      msgHost.textContent = 'Üzenetjavaslat beillesztve.';
+    });
+    host.querySelector('#aiDriverCopyBtn')?.addEventListener('click', () => copyTextValue(messageField.value, msgHost));
+  }
+
   async function geocodePlace(place) {
     if (!place) return null;
     const key = 'geo:' + place.toLowerCase();
@@ -671,6 +810,7 @@ const App = (() => {
     const info = document.createElement('div');
     info.innerHTML = notificationNotice('trip');
     form.appendChild(info);
+    mountTripAiTools(form);
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const msg = document.getElementById('tripFormMsg');
@@ -854,6 +994,7 @@ const App = (() => {
       const nameInput = driverForm.querySelector('[name="name"]');
       if (nameInput && !nameInput.value) nameInput.value = session.user.user_metadata?.name || session.user.user_metadata?.full_name || session.user.email.split('@')[0];
     }
+    mountDriverQuestionAiTools(driverForm);
     driverForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const ok = await AppAuth.requireAuth('kapcsolat.html');
