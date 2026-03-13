@@ -1,12 +1,20 @@
-1. GitHubon írd felül az összes fájlt ebből a ZIP-ből.
-2. A supabase-setup.sql TELJES tartalmát futtasd le a Supabase SQL Editorban.
-3. Ezután Ctrl+F5.
+FuvarVelünk – javított csomag
 
-Ebben a verzióban:
-- a footerben csak e-mail marad
-- foglalás javítva
-- indulás + érkezés útvonal térkép
-- utazás után 1-5 csillagos + szöveges értékelés
-- sofőr profil oldal
-- Facebook-poszt kép generátor
-- saját hirdetés törlése
+MI KERÜLT BELE:
+- saját fuvar szerkesztése / törlése a fuvarlistában és részleteknél
+- nem admin szerkesztés után a fuvar újra Függőben státuszba kerül
+- foglalással rendelkező saját fuvar nem törölhető
+- sofőr profilkép és autóképek feltöltése a fuvar feladásánál
+- autóképek megjelenítése a fuvarlistában, főoldalon és részleteknél
+- sofőr profilkép megjelenítése a kártyákon és a sofőr profil oldalon
+- bővített Supabase setup fájl policykkel és storage bucketekkel
+
+FONTOS:
+1. A GitHubra töltsd fel a ZIP teljes tartalmát felülírva.
+2. A Supabase SQL Editorban futtasd le a supabase-setup.sql teljes tartalmát.
+3. Utána a böngészőben Ctrl+F5 frissítés.
+
+SUPABASE OLDALON EZ KELL:
+- legyen aktív a driver-profile-images bucket
+- legyen aktív a trip-car-images bucket
+- legyenek lefuttatva a policyk a supabase-setup.sql-ből
