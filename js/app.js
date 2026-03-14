@@ -652,7 +652,11 @@ const App = (() => {
       : ['transfer', 'cash']).map(m => m === 'cash' ? 'Készpénz a sofőrnek' : 'Utalás a sofőrnek').join(' · ');
     const ratingHtml = starRating(trip.sofor_atlag || trip.sofor_ertekeles || 0, trip.sofor_ertekeles_db || 0);
     const fullBadge = free <= 0 ? '<span class="status rejected">Betelt</span><span class="status info">Már nem foglalható</span>' : '';
+    const ownTrip = !admin && isOwnTrip(trip);
     const manager = !admin && ownerCanEditOrDeleteTrip(trip);
+    const ownTripNotice = ownTrip
+      ? '<div class="notice" style="margin-top:12px">Ez a saját fuvarod. A foglalásokat lent tudod kezelni.</div>'
+      : '';
     return `
       <article class="card trip-card" data-trip-id="${trip.id}">
         <div class="trip-main">
@@ -669,6 +673,7 @@ const App = (() => {
           </div>
           ${seatBar(free, total)}
           ${trip.megjegyzes ? `<p>${escapeHtml(trip.megjegyzes)}</p>` : ''}
+          ${ownTripNotice}
           <div class="trip-contact">
             <div><strong>Sofőr:</strong> ${escapeHtml(trip.nev || '')}</div>
             <div><strong>Kapcsolat:</strong> ${escapeHtml(trip.email || '')}${trip.telefon ? ' · ' + escapeHtml(trip.telefon) : ''}</div>
@@ -695,10 +700,12 @@ const App = (() => {
             <button class="btn btn-warning js-trip-pending" data-id="${trip.id}">Függőben</button>
             <button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Admin szerkesztés</button>
             <button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Admin törlés</button>
-          ` : manager ? `
+          ` : ownTrip ? (manager ? `
             <button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Saját fuvar szerkesztése</button>
             <button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Saját fuvar törlése</button>
           ` : `
+            <div class="notice">Ez a saját fuvarod. Foglalásokat lent tudod kezelni.</div>
+          `) : `
             <button class="btn btn-primary js-book-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}' ${free < 1 ? 'disabled' : ''}>${free < 1 ? 'Betelt' : 'Foglalás'}</button>
             <a class="btn btn-secondary" href="kapcsolat.html?tripId=${trip.id}&driverName=${encodeURIComponent(trip.nev || '')}&driverEmail=${encodeURIComponent(trip.email || '')}">Kérdés a sofőrnek</a>
           `}
@@ -711,6 +718,7 @@ const App = (() => {
     const { total, free } = seatCounts(trip);
     const ratingHtml = starRating(trip.sofor_atlag || trip.sofor_ertekeles || 0, trip.sofor_ertekeles_db || 0);
     const full = free <= 0;
+    const ownTrip = isOwnTrip(trip);
     const manager = ownerCanEditOrDeleteTrip(trip);
     const isAdmin = !!currentViewer.admin;
     return `
@@ -727,7 +735,7 @@ const App = (() => {
           <button class="btn btn-ghost js-map-focus" data-origin="${escapeHtml(trip.indulas)}" data-destination="${escapeHtml(trip.erkezes)}">Térkép</button>
           <a class="btn btn-ghost" target="_blank" rel="noopener" href="${buildGoogleMapsDirectionsUrl(trip.indulas, trip.erkezes)}">Google útvonal</a>
           <button class="btn btn-ghost js-share-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}'>Megosztás</button>
-          ${isAdmin ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Admin szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Admin törlés</button>` : manager ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Törlés</button>` : `<button class="btn btn-primary js-book-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}' ${full ? 'disabled' : ''}>${full ? 'Betelt' : 'Foglalás'}</button><a class="btn btn-secondary" href="kapcsolat.html?tripId=${trip.id}&driverName=${encodeURIComponent(trip.nev || '')}&driverEmail=${encodeURIComponent(trip.email || '')}">Kérdés a sofőrnek</a>`}
+          ${isAdmin ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Admin szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Admin törlés</button>` : ownTrip ? (manager ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Törlés</button>` : `<div class="notice">Ez a saját fuvarod.</div>`) : `<button class="btn btn-primary js-book-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}' ${full ? 'disabled' : ''}>${full ? 'Betelt' : 'Foglalás'}</button><a class="btn btn-secondary" href="kapcsolat.html?tripId=${trip.id}&driverName=${encodeURIComponent(trip.nev || '')}&driverEmail=${encodeURIComponent(trip.email || '')}">Kérdés a sofőrnek</a>`}
         </div>
       </article>`;
   }
