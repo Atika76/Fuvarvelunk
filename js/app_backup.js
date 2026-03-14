@@ -747,6 +747,7 @@ const App = (() => {
           <div class="trip-contact">
             <div><strong>Sofőr:</strong> ${escapeHtml(trip.nev || '')}</div>
             <div><strong>Kapcsolat:</strong> ${escapeHtml(trip.email || '')}</div>
+            ${trip.telefon ? `<div><strong>Telefon:</strong> ${escapeHtml(trip.telefon)}</div>` : ''}
             <div><strong>Elfogadott fizetés:</strong> ${escapeHtml(paymentMethods)}</div>
             ${trip.bankszamla ? `<div><strong>Utalási adat:</strong> ${escapeHtml(trip.bankszamla)}</div>` : ''}
           </div>
@@ -1441,12 +1442,13 @@ const App = (() => {
         <h2>${escapeHtml(trip.nev || 'Ismeretlen sofőr')}</h2>
         <div>${starRating(trip.sofor_atlag || 0, trip.sofor_ertekeles_db || 0)}</div>
         <p style="margin:10px 0 0">Kapcsolat: ${escapeHtml(trip.email || '-')}</p>
+        ${trip.telefon ? `<p style="margin:8px 0 0">Telefon: ${escapeHtml(trip.telefon)}</p>` : ''}
         <p style="margin:8px 0 0">Aktív fuvarok száma: ${trips.length}</p>
       </div>`;
     const tripsBox = document.getElementById('driverTrips');
     if (tripsBox) tripsBox.innerHTML = trips.length ? trips.map(t => tripListCard(t)).join('') : '<div class="notice">Ennél a sofőrnél még nincs aktív fuvar.</div>';
     const contact = document.getElementById('driverContactBox');
-    if (contact) contact.innerHTML = `<strong>${escapeHtml(trip.nev || 'Sofőr')}</strong><br>${escapeHtml(trip.email || '-')}</div>`;
+    if (contact) contact.innerHTML = `<strong>${escapeHtml(trip.nev || 'Sofőr')}</strong><br>${escapeHtml(trip.email || '-')} ${trip.telefon ? `<br>${escapeHtml(trip.telefon)}` : ''}</div>`;
     const reviewsHost = document.createElement('section');
     reviewsHost.className = 'card';
     reviewsHost.style.marginTop = '24px';
@@ -1622,6 +1624,7 @@ const App = (() => {
         <div class="section-head"><div><span class="eyebrow">Sofőr profil</span><h2 style="margin:12px 0 0">${escapeHtml(trip.nev || '')}</h2></div><a class="btn btn-secondary" href="driver.html?name=${encodeURIComponent(trip.nev || '')}&email=${encodeURIComponent(trip.email || '')}">Sofőr profil</a></div>
         <p>${starRating(trip.sofor_atlag || 0, trip.sofor_ertekeles_db || 0)}</p>
         <p><strong>Kapcsolat:</strong> ${escapeHtml(trip.email || '')}</p>
+        ${trip.telefon ? `<p><strong>Telefon:</strong> ${escapeHtml(trip.telefon)}</p>` : ''}
         <p><strong>Utalási adat:</strong> ${escapeHtml(trip.bankszamla || '-')}</p>
       </section>
       <section class="two-col" style="margin-top:18px">

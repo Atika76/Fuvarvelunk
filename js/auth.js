@@ -287,11 +287,8 @@ window.AppAuth = (() => {
   }
 
   async function logout() {
-    try {
-      await syncOneSignalUser(null);
-    } catch (_) {}
+    const target = (APP_CONFIG.siteUrl || './') + 'index.html';
 
-    try { await sb.auth.signOut(); } catch (err) { console.error('Kilépési hiba:', err); }
     try {
       sessionStorage.removeItem('uv_next');
       sessionStorage.setItem('uv_logout_notice', 'Sikeres kijelentkezés.');
@@ -305,7 +302,24 @@ window.AppAuth = (() => {
       el.classList.add('hidden');
     });
 
-    const target = (APP_CONFIG.siteUrl || './') + 'index.html';
+    const quickLocalLogout = () => {
+      try { localStorage.removeItem('fv_user'); } catch(_) {}
+      try {
+        Object.keys(localStorage).forEach((key) => {
+          if (key.startsWith('sb-') || key.includes('supabase')) localStorage.removeItem(key);
+        });
+      } catch(_) {}
+    };
+
+    quickLocalLogout();
+
+    try { await sb.auth.signOut({ scope: 'local' }); } catch (err) { console.error('Kilépési hiba (local):', err); }
+
+    setTimeout(() => {
+      syncOneSignalUser(null).catch(() => {});
+      sb.auth.signOut().catch((err) => console.error('Kilépési hiba:', err));
+    }, 0);
+
     window.location.replace(target);
   }
 
