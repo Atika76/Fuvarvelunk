@@ -3,6 +3,7 @@ window.AppAuth = (() => {
   const ADMIN_CACHE_KEY = 'fv_admin_email_cache';
 
   const ONESIGNAL_APP_ID = '04a02749-13bd-4060-9559-f0808ee9f927';
+  const ONESIGNAL_PROMPT_KEY = 'fv_onesignal_prompt_shown';
   let oneSignalBootPromise = null;
 
   function setNext(url) {
@@ -95,6 +96,10 @@ window.AppAuth = (() => {
           try {
             await OneSignal.init({
               appId: ONESIGNAL_APP_ID,
+              serviceWorkerPath: 'OneSignalSDKWorker.js',
+              serviceWorkerUpdaterPath: 'OneSignalSDKUpdaterWorker.js',
+              notifyButton: { enable: false },
+              allowLocalhostAsSecureOrigin: true,
             });
             resolve(OneSignal);
           } catch (err) {
@@ -132,10 +137,33 @@ window.AppAuth = (() => {
       if (!OneSignal) return;
 
       const email = String(user?.email || '').trim().toLowerCase();
-      if (email) {
-        await OneSignal.login(email);
-      } else {
+      if (!email) {
         await OneSignal.logout();
+        return;
+      }
+
+      await OneSignal.login(email);
+
+      try {
+        if (OneSignal.User?.addTag) {
+          await OneSignal.User.addTag('email', email);
+          await OneSignal.User.addTag('role', (await isAdmin(email)) ? 'admin' : 'user');
+        }
+      } catch (tagErr) {
+        console.warn('OneSignal tag mentési hiba:', tagErr);
+      }
+
+      try {
+        const permission = typeof Notification !== 'undefined' ? Notification.permission : 'default';
+        if (permission !== 'granted') {
+          const alreadyPrompted = sessionStorage.getItem(ONESIGNAL_PROMPT_KEY) === '1';
+          if (!alreadyPrompted && OneSignal.Notifications?.requestPermission) {
+            sessionStorage.setItem(ONESIGNAL_PROMPT_KEY, '1');
+            await OneSignal.Notifications.requestPermission();
+          }
+        }
+      } catch (permErr) {
+        console.warn('OneSignal jogosultságkérés hiba:', permErr);
       }
     } catch (err) {
       console.warn('OneSignal felhasználó-szinkron hiba:', err);
