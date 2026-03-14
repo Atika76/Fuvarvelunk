@@ -153,6 +153,17 @@ const App = (() => {
     return !!(!currentViewer.admin && isOwnTrip(trip) && !tripHasBookings(trip));
   }
 
+
+  function isOwnBooking(trip = {}) {
+    return !!trip.viewer_has_booking;
+  }
+
+  function bookingButtonLabel(trip = {}) {
+    if (isTripFull(trip)) return 'Betelt';
+    if (isOwnBooking(trip)) return 'Saját foglalásod';
+    return 'Foglalás';
+  }
+
   function buildGoogleMapsDirectionsUrl(origin, destination) {
     const from = [String(origin || '').trim(), 'Magyarország'].filter(Boolean).join(', ');
     const to = [String(destination || '').trim(), 'Magyarország'].filter(Boolean).join(', ');
@@ -516,82 +527,23 @@ const App = (() => {
     }
   }
 
-  const LOCAL_SETTINGS_KEY = 'fv_site_settings_local';
-
-  function readLocalSettings() {
+  async function fetchSettings() {
     try {
-      const raw = localStorage.getItem(LOCAL_SETTINGS_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : null;
+      const { data } = await sb.from(tableSettings).select('*').order('id', { ascending: true }).limit(1).maybeSingle();
+      return data || null;
     } catch (_) {
       return null;
     }
   }
 
-  function writeLocalSettings(payload) {
-    try {
-      localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(payload || {}));
-    } catch (_) {}
-  }
-
-  async function fetchSettings() {
-    const local = readLocalSettings();
-    try {
-      const { data } = await sb.from(tableSettings).select('*').order('id', { ascending: true }).limit(1).maybeSingle();
-      return { ...(local || {}), ...(data || {}) };
-    } catch (_) {
-      return local || null;
-    }
-  }
-
-  async function saveSettingsPayload(payload, existingId = null) {
-    const clean = {
-      site_name: String(payload?.site_name || '').trim(),
-      company_name: String(payload?.company_name || '').trim(),
-      contact_email: String(payload?.contact_email || '').trim(),
-      admin_email: String(payload?.admin_email || '').trim(),
-      description: String(payload?.description || '').trim()
-    };
-
-    writeLocalSettings(clean);
-
-    const variants = [
-      { ...clean, id: existingId || 1 },
-      clean,
-      {
-        site_name: clean.site_name,
-        company_name: clean.company_name,
-        contact_email: clean.contact_email,
-        admin_email: clean.admin_email
-      }
-    ];
-
-    for (const variant of variants) {
-      try {
-        let error = null;
-        if (existingId) {
-          ({ error } = await sb.from(tableSettings).update(variant).eq('id', existingId));
-          if (!error) return { ok: true, mode: 'database' };
-        }
-        ({ error } = await sb.from(tableSettings).upsert([variant]));
-        if (!error) return { ok: true, mode: 'database' };
-      } catch (_) {}
-    }
-
-    return { ok: true, mode: 'local' };
-  }
-
   async function applySettings() {
     const s = await fetchSettings();
-    const brandName = s?.site_name || APP_CONFIG.brandName;
-    const companyName = s?.company_name || APP_CONFIG.companyName;
     const visibleEmail = s?.contact_email || APP_CONFIG.contactEmail;
-    document.querySelectorAll('[data-setting="siteName"]').forEach(el => el.textContent = brandName);
-    document.querySelectorAll('[data-setting="companyName"]').forEach(el => el.textContent = companyName);
+    document.querySelectorAll('[data-setting="siteName"]').forEach(el => el.textContent = APP_CONFIG.brandName);
+    document.querySelectorAll('[data-setting="companyName"]').forEach(el => el.textContent = APP_CONFIG.companyName);
     document.querySelectorAll('[data-setting="email"]').forEach(el => el.textContent = visibleEmail);
     document.querySelectorAll('[data-setting="adminEmail"]').forEach(el => el.textContent = s?.admin_email || APP_CONFIG.adminEmail);
-    document.querySelectorAll('[data-brand]').forEach(el => el.textContent = brandName);
+    document.querySelectorAll('[data-brand]').forEach(el => el.textContent = APP_CONFIG.brandName);
   }
 
   async function fetchApprovedTrips(filters = {}) {
@@ -657,10 +609,24 @@ const App = (() => {
       bookings = [];
     }
     const counts = bookingCountsMap(bookings);
+    const viewerEmail = String(currentViewer?.user?.email || '').trim().toLowerCase();
+    const ownBookingMap = {};
+    if (viewerEmail) {
+      bookings.forEach(b => {
+        const status = String(b.foglalasi_allapot || '').trim().toLowerCase();
+        if (['elutasítva', 'elutasitva', 'törölve', 'torolve', 'lemondva', 'cancelled'].includes(status)) return;
+        const bookingEmail = String(b.utas_email || b.email || '').trim().toLowerCase();
+        const tripKey = String(b.fuvar_id ?? b.trip_id ?? '');
+        if (!tripKey || !bookingEmail || bookingEmail !== viewerEmail) return;
+        ownBookingMap[tripKey] = b;
+      });
+    }
     return trips.map(trip => ({
       ...trip,
       booked_seats: Number(counts[String(trip.id)] || 0),
-      has_bookings: Number(counts[String(trip.id)] || 0) > 0
+      has_bookings: Number(counts[String(trip.id)] || 0) > 0,
+      viewer_has_booking: !!ownBookingMap[String(trip.id)],
+      viewer_booking: ownBookingMap[String(trip.id)] || null
     }));
   }
 
@@ -808,7 +774,7 @@ const App = (() => {
           ` : `
             <div class="notice">Ez a saját fuvarod. Foglalásokat lent tudod kezelni.</div>
           `) : `
-            <button class="btn btn-primary js-book-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}' ${free < 1 ? 'disabled' : ''}>${free < 1 ? 'Betelt' : 'Foglalás'}</button>
+            <button class="btn btn-primary js-book-trip" data-own-booking="${trip.viewer_has_booking ? '1' : '0'}" data-trip='${encodeURIComponent(JSON.stringify(trip))}' ${free < 1 ? 'disabled' : ''}>${bookingButtonLabel(trip)}</button>
             <a class="btn btn-secondary" href="kapcsolat.html?tripId=${trip.id}&driverName=${encodeURIComponent(trip.nev || '')}&driverEmail=${encodeURIComponent(trip.email || '')}">Kérdés a sofőrnek</a>
           `}
         </div>
@@ -837,7 +803,7 @@ const App = (() => {
           <button class="btn btn-ghost js-map-focus" data-origin="${escapeHtml(trip.indulas)}" data-destination="${escapeHtml(trip.erkezes)}">Térkép</button>
           <a class="btn btn-ghost" target="_blank" rel="noopener" href="${buildGoogleMapsDirectionsUrl(trip.indulas, trip.erkezes)}">Google útvonal</a>
           <button class="btn btn-ghost js-share-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}'>Megosztás</button>
-          ${isAdmin ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Admin szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Admin törlés</button>` : ownTrip ? (manager ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Törlés</button>` : `<div class="notice">Ez a saját fuvarod.</div>`) : `<button class="btn btn-primary js-book-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}' ${full ? 'disabled' : ''}>${full ? 'Betelt' : 'Foglalás'}</button><a class="btn btn-secondary" href="kapcsolat.html?tripId=${trip.id}&driverName=${encodeURIComponent(trip.nev || '')}&driverEmail=${encodeURIComponent(trip.email || '')}">Kérdés a sofőrnek</a>`}
+          ${isAdmin ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Admin szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Admin törlés</button>` : ownTrip ? (manager ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Törlés</button>` : `<div class="notice">Ez a saját fuvarod.</div>`) : `<button class="btn btn-primary js-book-trip" data-own-booking="${trip.viewer_has_booking ? '1' : '0'}" data-trip='${encodeURIComponent(JSON.stringify(trip))}' ${full ? 'disabled' : ''}>${bookingButtonLabel(trip)}</button><a class="btn btn-secondary" href="kapcsolat.html?tripId=${trip.id}&driverName=${encodeURIComponent(trip.nev || '')}&driverEmail=${encodeURIComponent(trip.email || '')}">Kérdés a sofőrnek</a>`}
         </div>
       </article>`;
   }
@@ -1406,8 +1372,8 @@ const App = (() => {
     const msg = document.getElementById('settingsMsg');
     const settings = await fetchSettings();
     if (settingsForm) {
-      settingsForm.siteName.value = settings?.site_name || APP_CONFIG.brandName;
-      settingsForm.companyName.value = settings?.company_name || APP_CONFIG.companyName;
+      settingsForm.siteName.value = APP_CONFIG.brandName;
+      settingsForm.companyName.value = APP_CONFIG.companyName;
       settingsForm.email.value = settings?.contact_email || APP_CONFIG.contactEmail;
       settingsForm.adminEmail.value = settings?.admin_email || APP_CONFIG.adminEmail;
       settingsForm.description.value = settings?.description || 'Gyors és biztonságos fuvarmegosztó felület utasoknak és sofőröknek.';
@@ -1415,19 +1381,11 @@ const App = (() => {
         e.preventDefault();
         const fd = new FormData(settingsForm);
         msg.textContent = 'Mentés...';
-        const payload = {
-          site_name: fd.get('siteName'),
-          company_name: fd.get('companyName'),
-          contact_email: fd.get('email'),
-          admin_email: fd.get('adminEmail'),
-          description: fd.get('description')
-        };
-        const result = await saveSettingsPayload(payload, settings?.id || null);
-        try { await AppAuth.fetchAdminEmail(true); } catch (_) {}
-        await applySettings();
-        msg.textContent = result.mode === 'database'
-          ? 'Mentve az adatbázisba.'
-          : 'Helyileg mentve. A Supabase mentést még be kell kapcsolni.';
+        const payload = { site_name: fd.get('siteName'), company_name: fd.get('companyName'), contact_email: fd.get('email'), admin_email: fd.get('adminEmail'), description: fd.get('description') };
+        let error = null;
+        if (settings?.id) ({ error } = await sb.from(tableSettings).update(payload).eq('id', settings.id));
+        else ({ error } = await sb.from(tableSettings).insert([payload]));
+        msg.textContent = error ? 'Nem sikerült menteni.' : 'Mentve.';
       });
     }
     const statHost = document.createElement('div');

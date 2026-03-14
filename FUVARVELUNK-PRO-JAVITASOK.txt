@@ -1,0 +1,6 @@
+FuvarVelünk PRO javítások
+
+- A beállítás mentése a régi, közvetlen Supabase-logikán maradt.
+- A telefonszám nyilvánosan nem jelenik meg a fuvar kártyán és a részleteknél.
+- Ha a belépett utasnak már van foglalása az adott fuvarra, a gomb szövege: Saját foglalásod.
+- Mobilon a foglalás felugró ablak és gombok javítva lettek.

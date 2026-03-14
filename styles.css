@@ -336,3 +336,55 @@ code{background:rgba(255,255,255,.08);padding:2px 6px;border-radius:8px}
   main.container{padding-top:14px}
   .hero{padding-top:10px}
 }
+
+
+.trip-actions .btn,.trip-actions a,.trip-tools .btn,.trip-tools a{word-break:break-word;white-space:normal}
+
+@media (max-width: 720px){
+  .modal-backdrop{
+    padding:10px;
+    align-items:end;
+  }
+  .modal{
+    width:100%;
+    max-height:88vh;
+    border-radius:22px;
+    padding:18px;
+  }
+  .modal .section-head{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:12px;
+  }
+  .modal .section-head > div,
+  .modal .section-head > button,
+  .modal .section-head > a{
+    width:100%;
+  }
+  .modal .grid-2,
+  .modal .grid-3,
+  .modal .two-col{
+    grid-template-columns:1fr;
+  }
+  .modal .trip-meta,
+  .modal .inline-pills,
+  .modal .trip-actions{
+    flex-direction:column;
+    align-items:stretch;
+    gap:10px;
+  }
+  .modal .trip-meta span,
+  .modal .trip-contact div,
+  .modal .inline-pills > *{
+    width:100%;
+  }
+  .modal .btn,
+  .modal a.btn,
+  .modal button{
+    width:100%;
+  }
+  .modal h2{
+    font-size:1.6rem;
+    line-height:1.2;
+  }
+}
