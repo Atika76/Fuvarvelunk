@@ -667,6 +667,7 @@ const App = (() => {
     const ratingHtml = starRating(trip.sofor_atlag || trip.sofor_ertekeles || 0, trip.sofor_ertekeles_db || 0);
     const full = free <= 0;
     const manager = canManageTrip(trip);
+    const isAdmin = !!currentViewer.admin;
     return `
       <article class="card trip-compact" data-trip-id="${trip.id}">
         ${tripGalleryMarkup(trip, true)}
@@ -680,7 +681,7 @@ const App = (() => {
           <button class="btn btn-ghost js-map-focus" data-origin="${escapeHtml(trip.indulas)}" data-destination="${escapeHtml(trip.erkezes)}">Térkép</button>
           <a class="btn btn-ghost" target="_blank" rel="noopener" href="${buildGoogleMapsDirectionsUrl(trip.indulas, trip.erkezes)}">Google útvonal</a>
           <button class="btn btn-ghost js-share-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}'>Megosztás</button>
-          ${admin ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Admin szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Admin törlés</button>` : manager ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Törlés</button>` : `<button class="btn btn-primary js-book-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}' ${full ? 'disabled' : ''}>${full ? 'Betelt' : 'Foglalás'}</button><a class="btn btn-secondary" href="kapcsolat.html?tripId=${trip.id}&driverName=${encodeURIComponent(trip.nev || '')}&driverEmail=${encodeURIComponent(trip.email || '')}">Kérdés a sofőrnek</a>`}
+          ${isAdmin ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Admin szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Admin törlés</button>` : manager ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Törlés</button>` : `<button class="btn btn-primary js-book-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}' ${full ? 'disabled' : ''}>${full ? 'Betelt' : 'Foglalás'}</button><a class="btn btn-secondary" href="kapcsolat.html?tripId=${trip.id}&driverName=${encodeURIComponent(trip.nev || '')}&driverEmail=${encodeURIComponent(trip.email || '')}">Kérdés a sofőrnek</a>`}
         </div>
       </article>`;
   }
