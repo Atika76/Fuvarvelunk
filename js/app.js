@@ -538,12 +538,14 @@ const App = (() => {
 
   async function applySettings() {
     const s = await fetchSettings();
+    const visibleSiteName = s?.site_name || APP_CONFIG.brandName;
+    const visibleCompanyName = s?.company_name || APP_CONFIG.companyName;
     const visibleEmail = s?.contact_email || APP_CONFIG.contactEmail;
-    document.querySelectorAll('[data-setting="siteName"]').forEach(el => el.textContent = APP_CONFIG.brandName);
-    document.querySelectorAll('[data-setting="companyName"]').forEach(el => el.textContent = APP_CONFIG.companyName);
+    document.querySelectorAll('[data-setting="siteName"]').forEach(el => el.textContent = visibleSiteName);
+    document.querySelectorAll('[data-setting="companyName"]').forEach(el => el.textContent = visibleCompanyName);
     document.querySelectorAll('[data-setting="email"]').forEach(el => el.textContent = visibleEmail);
     document.querySelectorAll('[data-setting="adminEmail"]').forEach(el => el.textContent = s?.admin_email || APP_CONFIG.adminEmail);
-    document.querySelectorAll('[data-brand]').forEach(el => el.textContent = APP_CONFIG.brandName);
+    document.querySelectorAll('[data-brand]').forEach(el => el.textContent = visibleSiteName);
   }
 
   async function fetchApprovedTrips(filters = {}) {
@@ -1372,8 +1374,8 @@ const App = (() => {
     const msg = document.getElementById('settingsMsg');
     const settings = await fetchSettings();
     if (settingsForm) {
-      settingsForm.siteName.value = APP_CONFIG.brandName;
-      settingsForm.companyName.value = APP_CONFIG.companyName;
+      settingsForm.siteName.value = settings?.site_name || APP_CONFIG.brandName;
+      settingsForm.companyName.value = settings?.company_name || APP_CONFIG.companyName;
       settingsForm.email.value = settings?.contact_email || APP_CONFIG.contactEmail;
       settingsForm.adminEmail.value = settings?.admin_email || APP_CONFIG.adminEmail;
       settingsForm.description.value = settings?.description || 'Gyors és biztonságos fuvarmegosztó felület utasoknak és sofőröknek.';
@@ -1386,6 +1388,9 @@ const App = (() => {
         if (settings?.id) ({ error } = await sb.from(tableSettings).update(payload).eq('id', settings.id));
         else ({ error } = await sb.from(tableSettings).insert([payload]));
         msg.textContent = error ? 'Nem sikerült menteni.' : 'Mentve.';
+        if (!error) {
+          await applySettings();
+        }
       });
     }
     const statHost = document.createElement('div');
