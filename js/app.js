@@ -922,7 +922,7 @@ const App = (() => {
     };
     const { error } = await sb.from(tableBookings).insert([booking]);
     if (error) throw error;
-    const payload = { ...booking, sofor_email: trip.email, sofor_nev: trip.nev, indulas: trip.indulas, erkezes: trip.erkezes, datum: trip.datum, ido: trip.ido, fizetesi_mod_text: method === 'cash' ? 'Készpénz a sofőrnek' : 'Utalás a sofőrnek' };
+    const payload = { ...booking, sofor_email: trip.email, sofor_nev: trip.nev, sofor_telefon: trip.telefon || '', indulas: trip.indulas, erkezes: trip.erkezes, datum: trip.datum, ido: trip.ido, fizetesi_mod_text: method === 'cash' ? 'Készpénz a sofőrnek' : 'Utalás a sofőrnek' };
     const mailOk = await sendNotificationMail('uj_foglalas', payload);
     const passengerMailOk = await sendNotificationMail('utas_visszaigazolas', payload);
     return { ...booking, __mailOk: mailOk, __passengerMailOk: passengerMailOk };
@@ -1113,8 +1113,10 @@ const App = (() => {
         const tripId = approveBooking.dataset.tripId;
         const seats = Number(approveBooking.dataset.seats || 1);
         await sb.from(tableBookings).update({ foglalasi_allapot: 'Jóváhagyva' }).eq('id', id);
+        const { data: bookingRow } = await sb.from(tableBookings).select('*').eq('id', id).maybeSingle();
+        let trip = null;
         if (tripId) {
-          const trip = await fetchTripById(tripId);
+          trip = await fetchTripById(tripId);
           if (trip) {
             const counts = seatCounts(trip);
             const newFree = Math.max(0, counts.free - seats);
@@ -1123,11 +1125,48 @@ const App = (() => {
             await sb.from(tableTrips).update(patch).eq('id', tripId);
           }
         }
+        if (bookingRow && trip) {
+          await sendNotificationMail('foglalas_jovahagyva', {
+            ...bookingRow,
+            utas_email: bookingRow.utas_email || bookingRow.email || '',
+            utas_nev: bookingRow.utas_nev || bookingRow.nev || '',
+            utas_telefon: bookingRow.telefon || '',
+            sofor_email: trip.email || '',
+            sofor_nev: trip.nev || '',
+            sofor_telefon: trip.telefon || '',
+            indulas: trip.indulas || '',
+            erkezes: trip.erkezes || '',
+            datum: trip.datum || '',
+            ido: trip.ido || ''
+          });
+        }
         location.reload();
         return;
       }
       const paidBooking = e.target.closest('.js-booking-paid');
-      if (paidBooking) { await sb.from(tableBookings).update({ fizetesi_allapot: 'Fizetve', foglalasi_allapot: 'Jóváhagyva' }).eq('id', paidBooking.dataset.id); location.reload(); return; }
+      if (paidBooking) {
+        await sb.from(tableBookings).update({ fizetesi_allapot: 'Fizetve', foglalasi_allapot: 'Jóváhagyva' }).eq('id', paidBooking.dataset.id);
+        const { data: bookingRow } = await sb.from(tableBookings).select('*').eq('id', paidBooking.dataset.id).maybeSingle();
+        const tripId = bookingRow?.fuvar_id || bookingRow?.trip_id || '';
+        const trip = tripId ? await fetchTripById(tripId) : null;
+        if (bookingRow && trip) {
+          await sendNotificationMail('fizetve_jelolve', {
+            ...bookingRow,
+            utas_email: bookingRow.utas_email || bookingRow.email || '',
+            utas_nev: bookingRow.utas_nev || bookingRow.nev || '',
+            utas_telefon: bookingRow.telefon || '',
+            sofor_email: trip.email || '',
+            sofor_nev: trip.nev || '',
+            sofor_telefon: trip.telefon || '',
+            indulas: trip.indulas || '',
+            erkezes: trip.erkezes || '',
+            datum: trip.datum || '',
+            ido: trip.ido || ''
+          });
+        }
+        location.reload();
+        return;
+      }
       const cancelBooking = e.target.closest('.js-booking-cancel');
       if (cancelBooking) {
         const { data: bookingRow } = await sb.from(tableBookings).select('*').eq('id', cancelBooking.dataset.id).maybeSingle();

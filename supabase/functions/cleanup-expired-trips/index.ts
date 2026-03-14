@@ -22,6 +22,42 @@ function buildTripTimestamp(datum?: string | null, ido?: string | null) {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
+function normPhone(value?: string | null) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  if (raw.startsWith('+')) return '+' + raw.slice(1).replace(/\D/g, '')
+  if (raw.startsWith('00')) return '+' + raw.slice(2).replace(/\D/g, '')
+  if (raw.startsWith('06')) return '+36' + raw.slice(2).replace(/\D/g, '')
+  return raw.replace(/\D/g, '')
+}
+
+async function sendEmail(resendApiKey: string, to: string, subject: string, html: string) {
+  if (!resendApiKey || !to) return { ok: false, skipped: true }
+  const resp = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: 'FuvarVelünk <onboarding@resend.dev>', to: [to], subject, html })
+  })
+  return { ok: resp.ok, skipped: false, data: await resp.text() }
+}
+
+async function sendSms(to: string, body: string) {
+  const sid = Deno.env.get('TWILIO_ACCOUNT_SID') || ''
+  const token = Deno.env.get('TWILIO_AUTH_TOKEN') || ''
+  const from = Deno.env.get('TWILIO_FROM_NUMBER') || ''
+  const phone = normPhone(to)
+  if (!sid || !token || !from || !phone) return { ok: false, skipped: true }
+  const resp = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Basic ' + btoa(`${sid}:${token}`),
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ From: from, To: phone, Body: body }).toString(),
+  })
+  return { ok: resp.ok, skipped: false, data: await resp.text() }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ ok: false, message: 'Method not allowed' }, 405)
@@ -36,6 +72,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+    const resendApiKey = Deno.env.get('RESEND_API_KEY') || ''
     if (!supabaseUrl || !serviceRoleKey) {
       return json({ ok: false, message: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' }, 500)
     }
@@ -49,8 +86,10 @@ serve(async (req) => {
 
     const graceDays = Number(body.graceDays ?? 3)
     const dryRun = Boolean(body.dryRun ?? false)
+    const reminderWindowMinutes = Number(body.reminderWindowMinutes ?? 120)
     const now = new Date()
     const threshold = new Date(now.getTime() - graceDays * 24 * 60 * 60 * 1000)
+    const reminderLimit = new Date(now.getTime() + reminderWindowMinutes * 60 * 1000)
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -58,13 +97,20 @@ serve(async (req) => {
 
     const { data: trips, error: tripsError } = await admin
       .from('fuvarok')
-      .select('id, datum, ido, indulas, erkezes, statusz')
+      .select('id, datum, ido, indulas, erkezes, statusz, email, nev, telefon')
 
     if (tripsError) throw tripsError
 
     const expiredTrips = (trips || []).filter((trip: any) => {
       const when = buildTripTimestamp(trip?.datum, trip?.ido)
       return when && when < threshold
+    })
+
+    const upcomingTrips = (trips || []).filter((trip: any) => {
+      const when = buildTripTimestamp(trip?.datum, trip?.ido)
+      if (!when) return false
+      const status = String(trip?.statusz || '').toLowerCase()
+      return when >= now && when <= reminderLimit && !['függőben', 'elutasítva', 'torolve', 'törölve'].includes(status)
     })
 
     const expiredIds = expiredTrips.map((trip: any) => trip.id).filter(Boolean)
@@ -76,8 +122,50 @@ serve(async (req) => {
       threshold: threshold.toISOString(),
       expired_trip_count: expiredIds.length,
       expired_trip_ids: expiredIds,
+      upcoming_trip_count: upcomingTrips.length,
+      reminder_window_minutes: reminderWindowMinutes,
       dryRun,
     }
+
+    const reminderLogs: any[] = []
+    if (!dryRun && upcomingTrips.length) {
+      for (const trip of upcomingTrips) {
+        const { data: existingLog } = await admin
+          .from('email_naplo')
+          .select('id')
+          .eq('tipus', 'sofor_indulas_emlekezteto')
+          .contains('payload', { trip_id: trip.id })
+          .limit(1)
+
+        if (existingLog && existingLog.length) {
+          reminderLogs.push({ trip_id: trip.id, skipped: true, reason: 'already_sent' })
+          continue
+        }
+
+        const { count: bookingCount } = await admin
+          .from('foglalasok')
+          .select('id', { count: 'exact', head: true })
+          .eq('fuvar_id', trip.id)
+
+        const subject = `Fuvar indul 2 órán belül: ${trip.indulas || ''} → ${trip.erkezes || ''}`
+        const html = `<h2>Indulási emlékeztető</h2><p>Kedves ${trip.nev || 'Sofőr'}!</p><p>A fuvarod ${reminderWindowMinutes} percen belül indul.</p><p><strong>${trip.indulas || ''} → ${trip.erkezes || ''}</strong></p><p>Dátum: ${trip.datum || ''} ${trip.ido || ''}</p><p>Foglalások száma: ${bookingCount || 0}</p>`
+        const emailRes = await sendEmail(resendApiKey, trip.email || '', subject, html)
+        const smsRes = await sendSms(trip.telefon || '', `FuvarVelünk: a ${trip.indulas || ''} → ${trip.erkezes || ''} fuvarod ${Math.round(reminderWindowMinutes / 60)} órán belül indul. Foglalások: ${bookingCount || 0}.`)
+
+        await admin.from('email_naplo').insert([{
+          tipus: 'sofor_indulas_emlekezteto',
+          cel_email: trip.email || '',
+          statusz: emailRes.ok ? 'elkuldve' : (emailRes.skipped ? 'kihagyva' : 'sikertelen'),
+          sikeres: !!emailRes.ok,
+          targy: subject,
+          payload: { trip_id: trip.id, sms_ok: !!smsRes.ok, sms_skipped: !!smsRes.skipped, foglalas_db: bookingCount || 0 },
+        }])
+
+        reminderLogs.push({ trip_id: trip.id, email_ok: !!emailRes.ok, sms_ok: !!smsRes.ok, sms_skipped: !!smsRes.skipped })
+      }
+    }
+
+    result.reminders = reminderLogs
 
     if (!expiredIds.length || dryRun) {
       return json(result)
