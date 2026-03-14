@@ -685,8 +685,9 @@ const App = (() => {
         <p class="trip-compact-meta">${escapeHtml(trip.datum || '')} • ${escapeHtml(trip.ido || '')} • ${fmtCurrency(trip.ar)} Ft / fő</p>
         ${driverMiniMarkup(trip, ratingHtml)}
         ${seatBar(free, total)}
+        ${(isAdmin || manager) && tripHasBookings(trip) ? `<div class="inline-pills" style="margin:10px 0 0"><span class="status info">Van foglalás ezen a fuvaron</span></div>` : ''}
         <div class="trip-tools">
-          <a class="btn btn-ghost" href="trip.html?id=${trip.id}">Részletek</a>
+          <a class="btn btn-ghost" href="trip.html?id=${trip.id}${(isAdmin || manager) ? '#driverBookingsSection' : ''}">Részletek${(isAdmin || manager) && tripHasBookings(trip) ? ' / foglalások' : ''}</a>
           <button class="btn btn-ghost js-map-focus" data-origin="${escapeHtml(trip.indulas)}" data-destination="${escapeHtml(trip.erkezes)}">Térkép</button>
           <a class="btn btn-ghost" target="_blank" rel="noopener" href="${buildGoogleMapsDirectionsUrl(trip.indulas, trip.erkezes)}">Google útvonal</a>
           <button class="btn btn-ghost js-share-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}'>Megosztás</button>
@@ -695,16 +696,20 @@ const App = (() => {
       </article>`;
   }
 
-  function bookingCard(b, tripMap = {}) {
+  function bookingCard(b, tripMap = {}, options = {}) {
     const trip = tripMap[String(b.fuvar_id ?? b.trip_id ?? '')] || {};
+    const compact = !!options.compact;
+    const status = String(b.foglalasi_allapot || 'Új').toLowerCase();
+    const showApprove = !['jóváhagyva','jovahagyva','elutasítva','elutasitva'].includes(status);
+    const showPaid = String(b.fizetesi_allapot || '').toLowerCase() !== 'fizetve';
     return `
-      <article class="card admin-item">
+      <article class="card admin-item${compact ? ' driver-booking-card' : ''}">
         <div>
           <div class="inline-pills">${statusBadge(b.foglalasi_allapot || 'Új')} ${statusBadge(b.fizetesi_allapot || 'Függőben')}</div>
           <h3 style="margin:12px 0 8px">${escapeHtml(trip.indulas || '')} → ${escapeHtml(trip.erkezes || '')}</h3>
           <div class="trip-meta">
-            <span><strong>Foglaló:</strong> ${escapeHtml(b.nev || '')}</span>
-            <span><strong>E-mail:</strong> ${escapeHtml(b.email || '')}</span>
+            <span><strong>Foglaló:</strong> ${escapeHtml(b.nev || b.utas_nev || '')}</span>
+            <span><strong>E-mail:</strong> ${escapeHtml(b.email || b.utas_email || '')}</span>
             <span><strong>Telefon:</strong> ${escapeHtml(b.telefon || '')}</span>
             <span><strong>Helyek:</strong> ${escapeHtml(String(b.foglalt_helyek || 1))}</span>
           </div>
@@ -717,11 +722,15 @@ const App = (() => {
           <p><strong>Létrehozva:</strong> ${escapeHtml(String(b.created_at || '')).slice(0, 16).replace('T', ' ')}</p>
         </div>
         <div class="trip-actions">
-          <button class="btn btn-success js-booking-approve" data-id="${b.id}" data-trip-id="${b.fuvar_id ?? b.trip_id ?? ''}" data-seats="${b.foglalt_helyek || 1}">Jóváhagyás</button>
-          <button class="btn btn-warning js-booking-paid" data-id="${b.id}">Fizetve</button>
-          <button class="btn btn-danger js-booking-cancel" data-id="${b.id}">Törlés</button>
+          ${showApprove ? `<button class="btn btn-success js-booking-approve" data-id="${b.id}" data-trip-id="${b.fuvar_id ?? b.trip_id ?? ''}" data-seats="${b.foglalt_helyek || 1}">Jóváhagyás</button>` : ''}
+          ${showPaid ? `<button class="btn btn-warning js-booking-paid" data-id="${b.id}">Fizetve</button>` : ''}
+          <button class="btn btn-danger js-booking-cancel" data-id="${b.id}">${showApprove ? 'Elutasítás / törlés' : 'Törlés'}</button>
         </div>
       </article>`;
+  }
+
+  function bookingSummaryCard(b, tripMap = {}) {
+    return bookingCard(b, tripMap, { compact: true });
   }
 
   function reviewCard(r) {
@@ -1319,6 +1328,37 @@ const App = (() => {
     });
   }
 
+  async function fetchBookingsForTrip(tripId) {
+    try {
+      const { data, error } = await sb.from(tableBookings).select('*').eq('fuvar_id', tripId).order('created_at', { ascending: false });
+      if (error) return [];
+      return data || [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function buildDriverBookingsSection(trip, bookings = []) {
+    const tripMap = { [String(trip.id)]: trip };
+    const totalRequested = bookings.reduce((sum, b) => sum + Number(b.foglalt_helyek || 1), 0);
+    const pendingCount = bookings.filter(b => ['új','uj'].includes(String(b.foglalasi_allapot || '').toLowerCase())).length;
+    return `
+      <section class="card detail-extra" id="driverBookingsSection">
+        <div class="section-head">
+          <div><span class="eyebrow">Saját foglalások</span><h2 style="margin:12px 0 0">Foglalások kezelése</h2></div>
+          <div class="inline-pills">
+            <span class="pill">Összes foglalás: ${bookings.length}</span>
+            <span class="pill">Új: ${pendingCount}</span>
+            <span class="pill">Igényelt helyek: ${totalRequested}</span>
+          </div>
+        </div>
+        <p class="small-help" style="margin:0 0 14px">Itt látod az utas foglalásait. Sofőrként jóvá tudod hagyni vagy el tudod utasítani őket.</p>
+        <div class="driver-bookings-list">
+          ${bookings.length ? bookings.map(b => bookingSummaryCard(b, tripMap)).join('') : '<div class="notice">Ehhez a fuvarhoz még nincs foglalás.</div>'}
+        </div>
+      </section>`;
+  }
+
   async function initTripDetailPage() {
     const wrap = document.getElementById('tripDetail');
     if (!wrap) return;
@@ -1328,9 +1368,15 @@ const App = (() => {
       const tripRaw = await fetchTripById(id);
       if (!tripRaw) { wrap.innerHTML = '<div class="empty-state">A fuvar nem található.</div>'; return; }
       const [trip] = await enrichTripsWithRatings([tripRaw]);
-      const [driverReviews, tripReviews] = await Promise.all([fetchRatingsForTrip(trip.id, 'sofor'), fetchRatingsForTrip(trip.id, 'utazas')]);
+      const isManagerView = !!(currentViewer.admin || isOwnTrip(trip));
+      const [driverReviews, tripReviews, tripBookings] = await Promise.all([
+        fetchRatingsForTrip(trip.id, 'sofor'),
+        fetchRatingsForTrip(trip.id, 'utazas'),
+        isManagerView ? fetchBookingsForTrip(trip.id) : Promise.resolve([])
+      ]);
       wrap.innerHTML = `
         ${tripCard(trip, false)}
+        ${isManagerView ? buildDriverBookingsSection(trip, tripBookings) : ''}
         <section class="card detail-extra">
           <div class="section-head"><div><span class="eyebrow">Sofőr profil</span><h2 style="margin:12px 0 0">${escapeHtml(trip.nev || '')}</h2></div><a class="btn btn-secondary" href="driver.html?name=${encodeURIComponent(trip.nev || '')}&email=${encodeURIComponent(trip.email || '')}">Sofőr profil</a></div>
           <p>${starRating(trip.sofor_atlag || 0, trip.sofor_ertekeles_db || 0)}</p>
