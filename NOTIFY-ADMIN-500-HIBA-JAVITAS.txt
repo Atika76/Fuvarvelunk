@@ -1,0 +1,52 @@
+FuvarVelünk – notify-admin 500 hiba javítás
+
+A ZIP-ben javítva lett:
+- supabase/functions/notify-admin/index.ts
+
+Mi lett javítva:
+- stabilabb JSON beolvasás
+- bővebb CORS fejlécek
+- POST ellenőrzés
+- részletesebb visszajelzés email / SMS / push eredményről
+- nem dől el attól, ha valamelyik külső szolgáltató hibázik
+- jobb hibanaplózás az email_naplo táblába
+
+KÖTELEZŐ SUPABASE SECRETS:
+RESEND_API_KEY=...
+RESEND_FROM_EMAIL=verified@te-domainod.hu   vagy a Resendben engedélyezett cím
+RESEND_FROM_NAME=FuvarVelünk
+ADMIN_EMAIL=cegweb26@gmail.com
+ONESIGNAL_APP_ID=...
+ONESIGNAL_API_KEY=...
+SITE_URL=https://fuvarvelunk.hu
+SUPABASE_URL=https://qkppqjcazakocxgxtlzc.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=...
+
+Nagyon fontos:
+1. Ha a RESEND_FROM_EMAIL nincs jól beállítva vagy nincs hitelesítve, az email nem fog kimenni.
+2. Ha az ONESIGNAL_APP_ID vagy ONESIGNAL_API_KEY hibás, push nem fog menni.
+3. A push csak annak a felhasználónak megy, aki a böngészőben tényleg engedélyezte az értesítéseket.
+4. Edge-ben a webpush engedélyt külön is jóvá kell hagyni.
+
+DEPLOY:
+supabase functions deploy notify-admin
+
+GYORS TESZT a Supabase Functionből:
+{
+  "kind": "uj_fuvar",
+  "payload": {
+    "indulas": "Budapest",
+    "erkezes": "Győr",
+    "datum": "2026-03-15",
+    "ido": "18:00",
+    "nev": "Teszt Sofőr",
+    "email": "cegweb26@gmail.com",
+    "telefon": "+36301234567"
+  },
+  "adminEmail": "cegweb26@gmail.com"
+}
+
+Ha a response-ben ezt látod:
+- email_enabled: false -> nincs RESEND_API_KEY
+- push_enabled: false -> hiányzik az ONESIGNAL_APP_ID vagy ONESIGNAL_API_KEY
+- results.data mezőben látszik a Resend vagy OneSignal konkrét hibaüzenete

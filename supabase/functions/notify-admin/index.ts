@@ -1,22 +1,23 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || ''
-const ADMIN_EMAIL = Deno.env.get('ADMIN_EMAIL') || ''
-const RESEND_FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'onboarding@resend.dev'
-const RESEND_FROM_NAME = Deno.env.get('RESEND_FROM_NAME') || 'FuvarVelünk'
+const RESEND_API_KEY = (Deno.env.get('RESEND_API_KEY') || '').trim()
+const ADMIN_EMAIL = (Deno.env.get('ADMIN_EMAIL') || '').trim()
+const RESEND_FROM_EMAIL = (Deno.env.get('RESEND_FROM_EMAIL') || 'onboarding@resend.dev').trim()
+const RESEND_FROM_NAME = (Deno.env.get('RESEND_FROM_NAME') || 'FuvarVelünk').trim()
 const FALLBACK_ADMIN_EMAIL = ADMIN_EMAIL || 'cegweb26@gmail.com'
-const TWILIO_ACCOUNT_SID = Deno.env.get('TWILIO_ACCOUNT_SID') || ''
-const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN') || ''
-const TWILIO_FROM_NUMBER = Deno.env.get('TWILIO_FROM_NUMBER') || ''
+const TWILIO_ACCOUNT_SID = (Deno.env.get('TWILIO_ACCOUNT_SID') || '').trim()
+const TWILIO_AUTH_TOKEN = (Deno.env.get('TWILIO_AUTH_TOKEN') || '').trim()
+const TWILIO_FROM_NUMBER = (Deno.env.get('TWILIO_FROM_NUMBER') || '').trim()
 
-const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID') || ''
-const ONESIGNAL_API_KEY = Deno.env.get('ONESIGNAL_API_KEY') || ''
-const SITE_URL = (Deno.env.get('SITE_URL') || 'https://fuvarvelunk.hu').replace(/\/$/, '')
+const ONESIGNAL_APP_ID = (Deno.env.get('ONESIGNAL_APP_ID') || '').trim()
+const ONESIGNAL_API_KEY = (Deno.env.get('ONESIGNAL_API_KEY') || '').trim()
+const SITE_URL = ((Deno.env.get('SITE_URL') || 'https://fuvarvelunk.hu').trim() || 'https://fuvarvelunk.hu').replace(/\/$/, '')
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'content-type'
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 function esc(value: unknown) {
@@ -41,13 +42,18 @@ function normExternalId(value: unknown) {
   return String(value ?? '').trim().toLowerCase()
 }
 
-function buildUrl(path: string, params: Record<string, string | undefined> = {}, hash = '') {
-  const url = new URL(path.startsWith('http') ? path : `${SITE_URL}${path.startsWith('/') ? '' : '/'}${path}`)
-  Object.entries(params).forEach(([key, value]) => {
-    if (value) url.searchParams.set(key, value)
-  })
-  if (hash) url.hash = hash.startsWith('#') ? hash.slice(1) : hash
-  return url.toString()
+function safeUrl(path: string, params: Record<string, string | undefined> = {}, hash = '') {
+  try {
+    const base = SITE_URL || 'https://fuvarvelunk.hu'
+    const url = new URL(path.startsWith('http') ? path : `${base}${path.startsWith('/') ? '' : '/'}${path}`)
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) url.searchParams.set(key, value)
+    })
+    if (hash) url.hash = hash.startsWith('#') ? hash.slice(1) : hash
+    return url.toString()
+  } catch (_) {
+    return SITE_URL || 'https://fuvarvelunk.hu'
+  }
 }
 
 function ctaButton(label: string, href: string, tone: 'primary' | 'success' | 'dark' = 'primary') {
@@ -74,6 +80,16 @@ function emailLayout(title: string, introHtml: string, detailsHtml: string, ctas
     </div>`
 }
 
+async function readJsonSafe(req: Request) {
+  const raw = await req.text()
+  if (!raw || !raw.trim()) return {}
+  try {
+    return JSON.parse(raw)
+  } catch (error) {
+    throw new Error(`Hibás JSON kérés: ${String(error)}`)
+  }
+}
+
 async function sendMail(to: string, subject: string, html: string) {
   const cleanTo = String(to || '').trim()
   if (!cleanTo) {
@@ -88,97 +104,92 @@ async function sendMail(to: string, subject: string, html: string) {
     return { ok: false, skipped: false, channel: 'email', to: cleanTo, subject, reason: 'missing_RESEND_FROM_EMAIL' }
   }
 
-  const resend = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${RESEND_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      from: `${RESEND_FROM_NAME} <${RESEND_FROM_EMAIL}>`,
-      to: [cleanTo],
-      subject,
-      html,
+  try {
+    const resend = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: `${RESEND_FROM_NAME} <${RESEND_FROM_EMAIL}>`,
+        to: [cleanTo],
+        subject,
+        html,
+      })
     })
-  })
 
-  const data = await resend.text()
-  return { ok: resend.ok, skipped: false, channel: 'email', to: cleanTo, subject, data }
+    const data = await resend.text()
+    return { ok: resend.ok, skipped: false, channel: 'email', to: cleanTo, subject, status: resend.status, data }
+  } catch (error) {
+    return { ok: false, skipped: false, channel: 'email', to: cleanTo, subject, reason: 'fetch_error', error: String(error) }
+  }
 }
-
 
 async function sendSms(to: string, body: string) {
   const phone = normPhone(to)
-  if (!phone) return { ok: false, skipped: true, reason: 'missing_phone' }
+  if (!phone) return { ok: false, skipped: true, channel: 'sms', reason: 'missing_phone' }
   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER) {
-    return { ok: false, skipped: true, reason: 'missing_twilio_config', to: phone }
+    return { ok: false, skipped: true, channel: 'sms', reason: 'missing_twilio_config', to: phone }
   }
 
-  const resp = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
-    method: 'POST',
-    headers: {
-      'Authorization': 'Basic ' + btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`),
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      From: TWILIO_FROM_NUMBER,
-      To: phone,
-      Body: body
-    }).toString(),
-  })
+  try {
+    const resp = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        From: TWILIO_FROM_NUMBER,
+        To: phone,
+        Body: body
+      }).toString(),
+    })
 
-  const data = await resp.text()
-  return { ok: resp.ok, skipped: false, channel: 'sms', to: phone, body, data }
+    const data = await resp.text()
+    return { ok: resp.ok, skipped: false, channel: 'sms', to: phone, body, status: resp.status, data }
+  } catch (error) {
+    return { ok: false, skipped: false, channel: 'sms', to: phone, reason: 'fetch_error', error: String(error) }
+  }
 }
 
 async function sendPush(externalIds: string[], heading: string, message: string, url?: string) {
   const ids = [...new Set((externalIds || []).map(normExternalId).filter(Boolean))]
-  if (!ids.length) return { ok: false, skipped: true, reason: 'missing_external_ids' }
+  if (!ids.length) return { ok: false, skipped: true, channel: 'push', reason: 'missing_external_ids' }
 
   if (!ONESIGNAL_APP_ID || !ONESIGNAL_API_KEY) {
-    return { ok: false, skipped: true, reason: 'missing_onesignal_config', ids }
+    return { ok: false, skipped: true, channel: 'push', reason: 'missing_onesignal_config', ids }
   }
 
-  const resp = await fetch('https://api.onesignal.com/notifications', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Key ${ONESIGNAL_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      app_id: ONESIGNAL_APP_ID,
-      target_channel: 'push',
-      include_aliases: {
-        external_id: ids
+  try {
+    const resp = await fetch('https://api.onesignal.com/notifications', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Key ${ONESIGNAL_API_KEY}`,
+        'Content-Type': 'application/json'
       },
-      headings: {
-        en: heading,
-        hu: heading
-      },
-      contents: {
-        en: message,
-        hu: message
-      },
-      url: url || SITE_URL,
-      web_url: url || SITE_URL
+      body: JSON.stringify({
+        app_id: ONESIGNAL_APP_ID,
+        target_channel: 'push',
+        include_aliases: { external_id: ids },
+        headings: { en: heading, hu: heading },
+        contents: { en: message, hu: message },
+        url: url || SITE_URL,
+        web_url: url || SITE_URL,
+      })
     })
-  })
 
-  const data = await resp.text()
-  return {
-    ok: resp.ok,
-    skipped: false,
-    channel: 'push',
-    ids,
-    heading,
-    message,
-    data
+    const data = await resp.text()
+    return { ok: resp.ok, skipped: false, channel: 'push', ids, heading, message, status: resp.status, data }
+  } catch (error) {
+    return { ok: false, skipped: false, channel: 'push', ids, reason: 'fetch_error', error: String(error) }
   }
 }
 
 function createAdminClient() {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+  const supabaseUrl = (Deno.env.get('SUPABASE_URL') || '').trim()
+  const serviceRoleKey = (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '').trim()
   if (!supabaseUrl || !serviceRoleKey) return null
 
   return createClient(supabaseUrl, serviceRoleKey, {
@@ -211,6 +222,7 @@ async function writeLog(kind: string, payload: Record<string, unknown>, subject:
         sms_skipped: !!smsResult?.skipped,
         push_ok: !!pushResult?.ok,
         push_skipped: !!pushResult?.skipped,
+        results,
       },
     }])
   } catch (err) {
@@ -231,9 +243,9 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
   const payText = esc(payload.fizetesi_mod_text || payload.fizetesi_mod || '')
   const tripId = String(payload.fuvar_id || payload.trip_id || payload.id || '').trim()
   const bookingId = String(payload.foglalas_id || payload.booking_id || '').trim()
-  const tripUrl = tripId ? buildUrl('/trip.html', { id: tripId, ...(bookingId ? { bookingId } : {}) }) : SITE_URL
-  const driverBookingsUrl = tripId ? buildUrl('/trip.html', { id: tripId, ...(bookingId ? { bookingId } : {}) }, 'driverBookingsSection') : tripUrl
-  const adminUrl = buildUrl('/admin.html', { ...(tripId ? { tripId } : {}), ...(bookingId ? { bookingId } : {}) })
+  const tripUrl = tripId ? safeUrl('/trip.html', { id: tripId, ...(bookingId ? { bookingId } : {}) }) : SITE_URL
+  const driverBookingsUrl = tripId ? safeUrl('/trip.html', { id: tripId, ...(bookingId ? { bookingId } : {}) }, 'driverBookingsSection') : tripUrl
+  const adminUrl = safeUrl('/admin.html', { ...(tripId ? { tripId } : {}), ...(bookingId ? { bookingId } : {}) })
 
   let emails: EmailItem[] = []
   let sms: SmsItem[] = []
@@ -374,26 +386,25 @@ serve(async (req) => {
     return new Response('ok', { headers: cors })
   }
 
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ ok: false, error: 'Csak POST kérés támogatott.' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json', ...cors }
+    })
+  }
+
   try {
-    const body = await req.json()
-    const kind = body.kind || body.tipus || ''
-    const payload = body.payload || body || {}
-    const adminEmail = String(body.adminEmail || payload.adminEmail || payload.admin_email || payload.sofor_email || ADMIN_EMAIL || FALLBACK_ADMIN_EMAIL).trim()
+    const body = await readJsonSafe(req)
+    const kind = String((body as any)?.kind || (body as any)?.tipus || 'uj_fuvar').trim()
+    const payload = ((body as any)?.payload || body || {}) as Record<string, unknown>
+    const adminEmail = String((body as any)?.adminEmail || payload.adminEmail || payload.admin_email || payload.sofor_email || ADMIN_EMAIL || FALLBACK_ADMIN_EMAIL).trim()
 
     const notification = buildNotification(kind, payload, adminEmail)
     const results: unknown[] = []
 
-    for (const item of notification.emails || []) {
-      results.push(await sendMail(item.to, item.subject, item.html))
-    }
-
-    for (const item of notification.sms || []) {
-      results.push(await sendSms(item.to, item.body))
-    }
-
-    for (const item of notification.push || []) {
-      results.push(await sendPush(item.externalIds, item.heading, item.message, item.url))
-    }
+    for (const item of notification.emails || []) results.push(await sendMail(item.to, item.subject, item.html))
+    for (const item of notification.sms || []) results.push(await sendSms(item.to, item.body))
+    for (const item of notification.push || []) results.push(await sendPush(item.externalIds, item.heading, item.message, item.url))
 
     const emailFailures = results.filter((x: any) => x.channel === 'email' && !x.ok && !x.skipped)
     const mainSubject = (notification.emails && notification.emails[0]?.subject) || kind
@@ -402,6 +413,7 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       ok: emailFailures.length === 0,
+      kind,
       subject: mainSubject,
       results,
       sms_enabled: !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER),
@@ -409,13 +421,15 @@ serve(async (req) => {
       email_enabled: !!RESEND_API_KEY,
       email_to: adminEmail,
       email_from: RESEND_FROM_EMAIL,
+      site_url: SITE_URL,
     }), {
       headers: { 'Content-Type': 'application/json', ...cors }
     })
   } catch (error) {
     return new Response(JSON.stringify({
       ok: false,
-      error: String(error)
+      error: String(error),
+      hint: 'Ellenőrizd a Supabase Edge Function Secrets beállításokat és a küldött JSON formátumát.'
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', ...cors }
