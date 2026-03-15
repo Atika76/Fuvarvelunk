@@ -10,6 +10,9 @@ const TWILIO_FROM_NUMBER = Deno.env.get('TWILIO_FROM_NUMBER') || ''
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID') || ''
 const ONESIGNAL_API_KEY = Deno.env.get('ONESIGNAL_API_KEY') || ''
 const SITE_URL = (Deno.env.get('SITE_URL') || 'https://fuvarvelunk.hu').replace(/\/$/, '')
+const SUPABASE_URL = (Deno.env.get('SUPABASE_URL') || '').replace(/\/$/, '')
+const APPROVAL_SIGNING_SECRET = Deno.env.get('EMAIL_APPROVAL_SECRET') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+const APPROVAL_TTL_SECONDS = Number(Deno.env.get('EMAIL_APPROVAL_TTL_SECONDS') || 60 * 60 * 24 * 7)
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -173,6 +176,81 @@ async function sendPush(target: PushTarget, heading: string, message: string, ur
   }
 }
 
+
+function base64UrlEncode(bytes: Uint8Array) {
+  let bin = ''
+  for (const b of bytes) bin += String.fromCharCode(b)
+  return btoa(bin).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
+}
+
+function base64UrlDecode(input: string) {
+  const normalized = input.replaceAll('-', '+').replaceAll('_', '/')
+  const pad = normalized.length % 4 === 0 ? '' : '='.repeat(4 - (normalized.length % 4))
+  const binary = atob(normalized + pad)
+  return new Uint8Array([...binary].map(ch => ch.charCodeAt(0)))
+}
+
+async function signText(value: string) {
+  if (!APPROVAL_SIGNING_SECRET) throw new Error('missing_approval_signing_secret')
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(APPROVAL_SIGNING_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(value))
+  return base64UrlEncode(new Uint8Array(signature))
+}
+
+async function verifyTextSignature(value: string, signature: string) {
+  const expected = await signText(value)
+  return crypto.timingSafeEqual(base64UrlDecode(expected), base64UrlDecode(signature))
+}
+
+async function createApprovalToken(tripId: string) {
+  const exp = Math.floor(Date.now() / 1000) + APPROVAL_TTL_SECONDS
+  const payload = `${tripId}.${exp}.approve`
+  const sig = await signText(payload)
+  return `${payload}.${sig}`
+}
+
+async function verifyApprovalToken(token: string, tripId: string) {
+  const parts = String(token || '').split('.')
+  if (parts.length !== 4) return { ok: false, reason: 'invalid_token_format' }
+  const [tokenTripId, expRaw, action, sig] = parts
+  if (tokenTripId !== tripId) return { ok: false, reason: 'trip_mismatch' }
+  if (action !== 'approve') return { ok: false, reason: 'invalid_action' }
+  const exp = Number(expRaw)
+  if (!Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000)) return { ok: false, reason: 'token_expired' }
+  const payload = `${tokenTripId}.${expRaw}.${action}`
+  const valid = await verifyTextSignature(payload, sig)
+  return valid ? { ok: true } : { ok: false, reason: 'bad_signature' }
+}
+
+function buildApprovalFunctionUrl(tripId: string, token: string) {
+  if (!SUPABASE_URL) return ''
+  return `${SUPABASE_URL}/functions/v1/notify-admin?action=approve_trip&tripId=${encodeURIComponent(tripId)}&token=${encodeURIComponent(token)}`
+}
+
+function approvalResultHtml(opts: { ok: boolean; title: string; message: string; tripId?: string; actionUrl?: string }) {
+  const adminUrl = buildUrl('/admin.html', opts.tripId ? { tripId: opts.tripId } : {})
+  return `<!doctype html>
+  <html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${esc(opts.title)}</title></head>
+  <body style="font-family:Arial,Helvetica,sans-serif;background:#f3f4f6;padding:24px;color:#111827">
+    <div style="max-width:720px;margin:40px auto;background:#fff;border-radius:18px;padding:28px;border:1px solid #e5e7eb;box-shadow:0 10px 30px rgba(0,0,0,.08)">
+      <div style="font-size:30px;font-weight:800;margin-bottom:12px">${esc(opts.title)}</div>
+      <p style="font-size:17px;line-height:1.6;margin:0 0 18px">${opts.message}</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:18px">
+        ${opts.ok ? `<a href="${esc(adminUrl)}" style="display:inline-block;background:#111827;color:#fff;text-decoration:none;padding:14px 18px;border-radius:12px;font-weight:700">Admin felület megnyitása</a>` : ''}
+        ${opts.actionUrl ? `<a href="${esc(opts.actionUrl)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:14px 18px;border-radius:12px;font-weight:700">Próbáld újra</a>` : ''}
+        <a href="${esc(SITE_URL)}" style="display:inline-block;background:#f3f4f6;color:#111827;text-decoration:none;padding:14px 18px;border-radius:12px;font-weight:700;border:1px solid #d1d5db">FuvarVelünk főoldal</a>
+      </div>
+    </div>
+  </body></html>`
+}
+
 function createAdminClient() {
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
@@ -219,7 +297,7 @@ type EmailItem = { to: string; subject: string; html: string }
 type SmsItem = { to: string; body: string }
 type PushItem = { externalIds?: string[]; filters?: Array<Record<string, unknown>>; heading: string; message: string; url?: string }
 
-function buildNotification(kind: string, payload: Record<string, unknown>, adminEmail: string) {
+async function buildNotification(kind: string, payload: Record<string, unknown>, adminEmail: string) {
   const route = `${esc(payload.indulas)} → ${esc(payload.erkezes || payload.cel || '')}`
   const dateTime = `${esc(payload.datum)} ${esc(payload.ido)}`.trim()
   const passengerName = esc(payload.utas_nev || payload.nev || 'Utas')
@@ -354,16 +432,23 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
 
     case 'uj_fuvar':
     default:
-      emails = [{
-        to: adminEmail,
-        subject: `Új fuvar vár jóváhagyásra: ${String(payload.indulas || '')} → ${String(payload.erkezes || payload.cel || '')}`,
-        html: emailLayout(
-          'Új fuvar vár jóváhagyásra',
-          `Új fuvar érkezett a rendszerbe. Az alábbi link közvetlenül az admin felületen a megfelelő fuvarhoz visz.${tripId ? ` Fuvar azonosító: <strong>${esc(tripId)}</strong>.` : ''}`,
-          `<p><strong>Fuvar:</strong> ${route}</p><p><strong>Dátum:</strong> ${dateTime}</p><p><strong>Sofőr:</strong> ${esc(payload.nev || payload.sofor_nev || '')} (${esc(payload.email || payload.sofor_email || '')})</p><p><strong>Telefonszám:</strong> ${esc(payload.telefon || '')}</p>${tripId ? `<p><strong>Fuvar ID:</strong> ${esc(tripId)}</p>` : ''}`,
-          [{ label: 'Jóváhagyás megnyitása', href: adminUrl, tone: 'dark', directLabel: 'Közvetlen link a jóváhagyáshoz' }]
-        )
-      }]
+      {
+        const approvalToken = tripId ? await createApprovalToken(tripId).catch(() => '') : ''
+        const oneClickApproveUrl = approvalToken && tripId ? buildApprovalFunctionUrl(tripId, approvalToken) : ''
+        emails = [{
+          to: adminEmail,
+          subject: `Új fuvar vár jóváhagyásra: ${String(payload.indulas || '')} → ${String(payload.erkezes || payload.cel || '')}`,
+          html: emailLayout(
+            'Új fuvar vár jóváhagyásra',
+            `Új fuvar érkezett a rendszerbe. ${oneClickApproveUrl ? 'Az első gombbal azonnal jóvá tudod hagyni admin oldal megnyitása nélkül.' : 'Az alábbi link közvetlenül az admin felületen a megfelelő fuvarhoz visz.'}${tripId ? ` Fuvar azonosító: <strong>${esc(tripId)}</strong>.` : ''}`,
+            `<p><strong>Fuvar:</strong> ${route}</p><p><strong>Dátum:</strong> ${dateTime}</p><p><strong>Sofőr:</strong> ${esc(payload.nev || payload.sofor_nev || '')} (${esc(payload.email || payload.sofor_email || '')})</p><p><strong>Telefonszám:</strong> ${esc(payload.telefon || '')}</p>${tripId ? `<p><strong>Fuvar ID:</strong> ${esc(tripId)}</p>` : ''}`,
+            [
+              ...(oneClickApproveUrl ? [{ label: 'Azonnali jóváhagyás', href: oneClickApproveUrl, tone: 'success' as const, directLabel: 'Közvetlen egykattintásos jóváhagyó link' }] : []),
+              { label: 'Jóváhagyás megnyitása', href: adminUrl, tone: 'dark' as const, directLabel: 'Közvetlen link a jóváhagyáshoz' }
+            ]
+          )
+        }]
+      }
       push = [{
         externalIds: [String(adminEmail || '')],
         filters: [{ field: 'tag', key: 'role', relation: '=', value: 'admin' }],
@@ -382,13 +467,77 @@ serve(async (req) => {
     return new Response('ok', { headers: cors })
   }
 
+  if (req.method === 'GET') {
+    try {
+      const url = new URL(req.url)
+      const action = url.searchParams.get('action') || ''
+      if (action !== 'approve_trip') {
+        return new Response(approvalResultHtml({ ok: false, title: 'Ismeretlen művelet', message: 'A megnyitott link nem támogatott FuvarVelünk művelet.' }), {
+          status: 400,
+          headers: { 'Content-Type': 'text/html; charset=utf-8', ...cors }
+        })
+      }
+
+      const tripId = (url.searchParams.get('tripId') || '').trim()
+      const token = (url.searchParams.get('token') || '').trim()
+      const verified = await verifyApprovalToken(token, tripId)
+      if (!verified.ok) {
+        return new Response(approvalResultHtml({ ok: false, title: 'A jóváhagyó link nem érvényes', message: 'Ez a link hibás, lejárt vagy már nem használható. Nyisd meg az admin felületet, és onnan hagyd jóvá a fuvart.', tripId }), {
+          status: 403,
+          headers: { 'Content-Type': 'text/html; charset=utf-8', ...cors }
+        })
+      }
+
+      const admin = createAdminClient()
+      if (!admin || !tripId) {
+        return new Response(approvalResultHtml({ ok: false, title: 'Hiányzó szerver beállítás', message: 'A jóváhagyás most nem végezhető el, mert hiányzik a szerveroldali konfiguráció.', tripId }), {
+          status: 500,
+          headers: { 'Content-Type': 'text/html; charset=utf-8', ...cors }
+        })
+      }
+
+      const { data: trip, error: fetchError } = await admin.from('fuvarok').select('*').eq('id', tripId).maybeSingle()
+      if (fetchError || !trip) {
+        return new Response(approvalResultHtml({ ok: false, title: 'A fuvar nem található', message: 'A jóváhagyandó fuvar nem található az adatbázisban.', tripId }), {
+          status: 404,
+          headers: { 'Content-Type': 'text/html; charset=utf-8', ...cors }
+        })
+      }
+
+      if (String(trip.statusz || '').trim() === 'Jóváhagyva') {
+        return new Response(approvalResultHtml({ ok: true, title: 'A fuvar már jóváhagyva', message: 'Ez a fuvar már korábban jóvá lett hagyva. Megnyithatod az admin felületet is.', tripId }), {
+          headers: { 'Content-Type': 'text/html; charset=utf-8', ...cors }
+        })
+      }
+
+      const { error: updateError } = await admin.from('fuvarok').update({ statusz: 'Jóváhagyva' }).eq('id', tripId)
+      if (updateError) {
+        return new Response(approvalResultHtml({ ok: false, title: 'A jóváhagyás nem sikerült', message: 'A szerver nem tudta jóváhagyni ezt a fuvart. Nyisd meg az admin felületet, és próbáld meg ott.', tripId }), {
+          status: 500,
+          headers: { 'Content-Type': 'text/html; charset=utf-8', ...cors }
+        })
+      }
+
+      await writeLog('egy_kattintasos_jovahagyas', { trip_id: tripId, statusz: 'Jóváhagyva', email: trip.email || trip.sofor_email || '' }, `Fuvar egykattintásos jóváhagyás: ${tripId}`, [{ channel: 'email', ok: true }])
+
+      return new Response(approvalResultHtml({ ok: true, title: 'A fuvar sikeresen jóváhagyva', message: 'A hirdetés most már jóvá lett hagyva, nem kellett hozzá megnyitni az admin oldalt.', tripId }), {
+        headers: { 'Content-Type': 'text/html; charset=utf-8', ...cors }
+      })
+    } catch (error) {
+      return new Response(approvalResultHtml({ ok: false, title: 'Sikertelen jóváhagyás', message: `Hiba történt: ${esc(String(error))}` }), {
+        status: 500,
+        headers: { 'Content-Type': 'text/html; charset=utf-8', ...cors }
+      })
+    }
+  }
+
   try {
     const body = await req.json()
     const kind = body.kind || body.tipus || ''
     const payload = body.payload || body || {}
     const adminEmail = body.adminEmail || FALLBACK_ADMIN_EMAIL
 
-    const notification = buildNotification(kind, payload, adminEmail)
+    const notification = await buildNotification(kind, payload, adminEmail)
     const results: unknown[] = []
 
     for (const item of notification.emails || []) {
