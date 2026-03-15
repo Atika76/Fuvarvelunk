@@ -1,0 +1,7 @@
+project_id = "qkppqjcazakocxgxtlzc"
+
+[functions.notify-admin]
+verify_jwt = false
+
+[functions.cleanup-expired-trips]
+verify_jwt = false

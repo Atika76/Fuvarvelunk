@@ -683,11 +683,7 @@ const App = (() => {
       const adminEmail = await AppAuth.fetchAdminEmail();
       const res = await fetch(APP_CONFIG.notificationFunctionUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': APP_CONFIG.supabaseKey,
-          'Authorization': `Bearer ${APP_CONFIG.supabaseKey}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind, payload, adminEmail })
       });
       let data = null;
