@@ -2,7 +2,10 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || ''
-const FALLBACK_ADMIN_EMAIL = 'cegweb26@gmail.com'
+const ADMIN_EMAIL = Deno.env.get('ADMIN_EMAIL') || ''
+const RESEND_FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'onboarding@resend.dev'
+const RESEND_FROM_NAME = Deno.env.get('RESEND_FROM_NAME') || 'FuvarVelünk'
+const FALLBACK_ADMIN_EMAIL = ADMIN_EMAIL || 'cegweb26@gmail.com'
 const TWILIO_ACCOUNT_SID = Deno.env.get('TWILIO_ACCOUNT_SID') || ''
 const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN') || ''
 const TWILIO_FROM_NUMBER = Deno.env.get('TWILIO_FROM_NUMBER') || ''
@@ -72,8 +75,17 @@ function emailLayout(title: string, introHtml: string, detailsHtml: string, ctas
 }
 
 async function sendMail(to: string, subject: string, html: string) {
-  if (!RESEND_API_KEY || !to) {
-    return { ok: false, skipped: true, reason: 'missing_mail_config_or_recipient' }
+  const cleanTo = String(to || '').trim()
+  if (!cleanTo) {
+    return { ok: false, skipped: true, channel: 'email', reason: 'missing_recipient' }
+  }
+
+  if (!RESEND_API_KEY) {
+    return { ok: false, skipped: false, channel: 'email', to: cleanTo, subject, reason: 'missing_RESEND_API_KEY' }
+  }
+
+  if (!RESEND_FROM_EMAIL) {
+    return { ok: false, skipped: false, channel: 'email', to: cleanTo, subject, reason: 'missing_RESEND_FROM_EMAIL' }
   }
 
   const resend = await fetch('https://api.resend.com/emails', {
@@ -83,16 +95,17 @@ async function sendMail(to: string, subject: string, html: string) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      from: 'FuvarVelünk <onboarding@resend.dev>',
-      to: [to],
+      from: `${RESEND_FROM_NAME} <${RESEND_FROM_EMAIL}>`,
+      to: [cleanTo],
       subject,
       html,
     })
   })
 
   const data = await resend.text()
-  return { ok: resend.ok, skipped: false, channel: 'email', to, subject, data }
+  return { ok: resend.ok, skipped: false, channel: 'email', to: cleanTo, subject, data }
 }
+
 
 async function sendSms(to: string, body: string) {
   const phone = normPhone(to)
@@ -365,7 +378,7 @@ serve(async (req) => {
     const body = await req.json()
     const kind = body.kind || body.tipus || ''
     const payload = body.payload || body || {}
-    const adminEmail = body.adminEmail || FALLBACK_ADMIN_EMAIL
+    const adminEmail = String(body.adminEmail || payload.adminEmail || payload.admin_email || payload.sofor_email || ADMIN_EMAIL || FALLBACK_ADMIN_EMAIL).trim()
 
     const notification = buildNotification(kind, payload, adminEmail)
     const results: unknown[] = []
@@ -393,6 +406,9 @@ serve(async (req) => {
       results,
       sms_enabled: !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER),
       push_enabled: !!(ONESIGNAL_APP_ID && ONESIGNAL_API_KEY),
+      email_enabled: !!RESEND_API_KEY,
+      email_to: adminEmail,
+      email_from: RESEND_FROM_EMAIL,
     }), {
       headers: { 'Content-Type': 'application/json', ...cors }
     })
