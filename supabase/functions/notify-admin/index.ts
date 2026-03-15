@@ -118,12 +118,37 @@ async function sendSms(to: string, body: string) {
   return { ok: resp.ok, skipped: false, channel: 'sms', to: phone, body, data }
 }
 
-async function sendPush(externalIds: string[], heading: string, message: string, url?: string) {
-  const ids = [...new Set((externalIds || []).map(normExternalId).filter(Boolean))]
-  if (!ids.length) return { ok: false, skipped: true, reason: 'missing_external_ids' }
+type PushTarget = { externalIds?: string[]; filters?: Array<Record<string, unknown>> }
+
+async function sendPush(target: PushTarget, heading: string, message: string, url?: string) {
+  const ids = [...new Set((target?.externalIds || []).map(normExternalId).filter(Boolean))]
+  const filters = Array.isArray(target?.filters) ? target.filters.filter(Boolean) : []
+
+  if (!ids.length && !filters.length) return { ok: false, skipped: true, reason: 'missing_push_target' }
 
   if (!ONESIGNAL_APP_ID || !ONESIGNAL_API_KEY) {
-    return { ok: false, skipped: true, reason: 'missing_onesignal_config', ids }
+    return { ok: false, skipped: true, reason: 'missing_onesignal_config', ids, filters_count: filters.length }
+  }
+
+  const body: Record<string, unknown> = {
+    app_id: ONESIGNAL_APP_ID,
+    target_channel: 'push',
+    headings: {
+      en: heading,
+      hu: heading
+    },
+    contents: {
+      en: message,
+      hu: message
+    },
+    url: url || SITE_URL,
+    web_url: url || SITE_URL
+  }
+
+  if (ids.length) {
+    body.include_aliases = { external_id: ids }
+  } else if (filters.length) {
+    body.filters = filters
   }
 
   const resp = await fetch('https://api.onesignal.com/notifications', {
@@ -132,23 +157,7 @@ async function sendPush(externalIds: string[], heading: string, message: string,
       'Authorization': `Key ${ONESIGNAL_API_KEY}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      app_id: ONESIGNAL_APP_ID,
-      target_channel: 'push',
-      include_aliases: {
-        external_id: ids
-      },
-      headings: {
-        en: heading,
-        hu: heading
-      },
-      contents: {
-        en: message,
-        hu: message
-      },
-      url: url || SITE_URL,
-      web_url: url || SITE_URL
-    })
+    body: JSON.stringify(body)
   })
 
   const data = await resp.text()
@@ -157,6 +166,7 @@ async function sendPush(externalIds: string[], heading: string, message: string,
     skipped: false,
     channel: 'push',
     ids,
+    filters_count: filters.length,
     heading,
     message,
     data
@@ -207,7 +217,7 @@ async function writeLog(kind: string, payload: Record<string, unknown>, subject:
 
 type EmailItem = { to: string; subject: string; html: string }
 type SmsItem = { to: string; body: string }
-type PushItem = { externalIds: string[]; heading: string; message: string; url?: string }
+type PushItem = { externalIds?: string[]; filters?: Array<Record<string, unknown>>; heading: string; message: string; url?: string }
 
 function buildNotification(kind: string, payload: Record<string, unknown>, adminEmail: string) {
   const route = `${esc(payload.indulas)} → ${esc(payload.erkezes || payload.cel || '')}`
@@ -244,6 +254,7 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
       }]
       push = [{
         externalIds: [String(payload.sofor_email || '')],
+        filters: [{ field: 'tag', key: 'email', relation: '=', value: String(payload.sofor_email || '') }],
         heading: 'Új foglalás érkezett',
         message: `${String(payload.indulas || '')} → ${String(payload.erkezes || '')} · ${String(payload.utas_nev || payload.nev || 'Utas')}`,
         url: driverBookingsUrl
@@ -284,6 +295,7 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
       }]
       push = [{
         externalIds: [String(payload.utas_email || payload.email || '')],
+        filters: [{ field: 'tag', key: 'email', relation: '=', value: String(payload.utas_email || payload.email || '') }],
         heading: 'Foglalás jóváhagyva',
         message: `${String(payload.indulas || '')} → ${String(payload.erkezes || '')} · ${String(payload.datum || '')} ${String(payload.ido || '')}`,
         url: tripUrl
@@ -309,6 +321,7 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
       }]
       push = [{
         externalIds: [String(payload.utas_email || payload.email || '')],
+        filters: [{ field: 'tag', key: 'email', relation: '=', value: String(payload.utas_email || payload.email || '') }],
         heading: 'Fizetés visszaigazolva',
         message: `${String(payload.indulas || '')} → ${String(payload.erkezes || '')} · indulás előtt 10 perccel érkezz`,
         url: tripUrl
@@ -332,6 +345,7 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
       }]
       push = [{
         externalIds: [String(payload.sofor_email || '')],
+        filters: [{ field: 'tag', key: 'email', relation: '=', value: String(payload.sofor_email || '') }],
         heading: 'Fuvar indul 2 órán belül',
         message: `${String(payload.indulas || '')} → ${String(payload.erkezes || '')} · foglalások: ${String(payload.foglalas_db || 0)}`,
         url: driverBookingsUrl
@@ -345,10 +359,17 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
         subject: `Új fuvar vár jóváhagyásra: ${String(payload.indulas || '')} → ${String(payload.erkezes || payload.cel || '')}`,
         html: emailLayout(
           'Új fuvar vár jóváhagyásra',
-          'Új fuvar érkezett a rendszerbe. Az alábbi link közvetlenül az admin felületen a megfelelő fuvarhoz visz.',
-          `<p><strong>Fuvar:</strong> ${route}</p><p><strong>Dátum:</strong> ${dateTime}</p><p><strong>Sofőr:</strong> ${esc(payload.nev || payload.sofor_nev || '')} (${esc(payload.email || payload.sofor_email || '')})</p><p><strong>Telefonszám:</strong> ${esc(payload.telefon || '')}</p>`,
+          `Új fuvar érkezett a rendszerbe. Az alábbi link közvetlenül az admin felületen a megfelelő fuvarhoz visz.${tripId ? ` Fuvar azonosító: <strong>${esc(tripId)}</strong>.` : ''}`,
+          `<p><strong>Fuvar:</strong> ${route}</p><p><strong>Dátum:</strong> ${dateTime}</p><p><strong>Sofőr:</strong> ${esc(payload.nev || payload.sofor_nev || '')} (${esc(payload.email || payload.sofor_email || '')})</p><p><strong>Telefonszám:</strong> ${esc(payload.telefon || '')}</p>${tripId ? `<p><strong>Fuvar ID:</strong> ${esc(tripId)}</p>` : ''}`,
           [{ label: 'Jóváhagyás megnyitása', href: adminUrl, tone: 'dark', directLabel: 'Közvetlen link a jóváhagyáshoz' }]
         )
+      }]
+      push = [{
+        externalIds: [String(adminEmail || '')],
+        filters: [{ field: 'tag', key: 'role', relation: '=', value: 'admin' }],
+        heading: 'Új fuvar vár jóváhagyásra',
+        message: `${String(payload.indulas || '')} → ${String(payload.erkezes || payload.cel || '')}${tripId ? ` · ID: ${tripId}` : ''}`,
+        url: adminUrl
       }]
       break
   }
@@ -379,7 +400,11 @@ serve(async (req) => {
     }
 
     for (const item of notification.push || []) {
-      results.push(await sendPush(item.externalIds, item.heading, item.message, item.url))
+      const first = await sendPush({ externalIds: item.externalIds }, item.heading, item.message, item.url)
+      results.push(first)
+      if ((!first.ok || first.skipped) && item.filters?.length) {
+        results.push(await sendPush({ filters: item.filters }, item.heading, item.message, item.url))
+      }
     }
 
     const emailFailures = results.filter((x: any) => x.channel === 'email' && !x.ok && !x.skipped)

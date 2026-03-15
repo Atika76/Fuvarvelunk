@@ -1,0 +1,24 @@
+FONTOS – ezt most mindenképp meg kell csinálni
+
+1) A GitHub fájlcsere önmagában NEM elég.
+   Az e-mail sablont és az automatikus push küldést a Supabase Edge Function futtatja.
+
+2) Újra kell deployolni ezt a functiont:
+   notify-admin
+
+CLI parancs:
+   supabase functions deploy notify-admin
+
+3) A javítások lényege ebben a csomagban:
+   - új fuvar feladáskor az insert után már lekéri a létrejött fuvar ID-ját
+   - új foglalásnál az insert után már lekéri a foglalás ID-ját
+   - így az e-mailben és pushban már célzott link tud menni
+   - admin új fuvar pushnál van OneSignal fallback is role=admin tag alapján
+   - foglalás/jóváhagyás pushnál van email tag fallback is
+
+4) Ha továbbra is a régi, sima tájékoztató email megy ki,
+   akkor biztosan még a régi notify-admin function fut a Supabase-ben.
+
+5) Ha a push teszt megy, de új fuvarnál nem jön:
+   - ezzel a csomaggal már megy az admin role tag fallback is
+   - ehhez az admin usernek be kell lépnie az oldalon és engedélyeznie kell a push-t

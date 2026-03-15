@@ -908,9 +908,10 @@ const App = (() => {
       ertekeles_db: 0
     };
     if (!payload.nev || !payload.indulas || !payload.erkezes) throw new Error('Tölts ki minden kötelező mezőt.');
-    const { error } = await sb.from(tableTrips).insert([payload]);
+    const { data: insertedTrip, error } = await sb.from(tableTrips).insert([payload]).select('*').single();
     if (error) throw error;
-    const mailOk = await sendNotificationMail('uj_fuvar', payload);
+    const notifyPayload = { ...payload, ...(insertedTrip || {}), trip_id: insertedTrip?.id || payload.id || '' };
+    const mailOk = await sendNotificationMail('uj_fuvar', notifyPayload);
     return mailOk;
   }
 
@@ -948,12 +949,26 @@ const App = (() => {
       utas_email: userEmail,
       utas_nev: fd.get('name')?.toString().trim() || ''
     };
-    const { error } = await sb.from(tableBookings).insert([booking]);
+    const { data: insertedBooking, error } = await sb.from(tableBookings).insert([booking]).select('*').single();
     if (error) throw error;
-    const payload = { ...booking, sofor_email: trip.email, sofor_nev: trip.nev, sofor_telefon: trip.telefon || '', indulas: trip.indulas, erkezes: trip.erkezes, datum: trip.datum, ido: trip.ido, fizetesi_mod_text: method === 'cash' ? 'Készpénz a sofőrnek' : 'Utalás a sofőrnek' };
+    const payload = {
+      ...booking,
+      ...(insertedBooking || {}),
+      foglalas_id: insertedBooking?.id || booking.id || '',
+      trip_id: trip.id,
+      id: trip.id,
+      sofor_email: trip.email,
+      sofor_nev: trip.nev,
+      sofor_telefon: trip.telefon || '',
+      indulas: trip.indulas,
+      erkezes: trip.erkezes,
+      datum: trip.datum,
+      ido: trip.ido,
+      fizetesi_mod_text: method === 'cash' ? 'Készpénz a sofőrnek' : 'Utalás a sofőrnek'
+    };
     const mailOk = await sendNotificationMail('uj_foglalas', payload);
     const passengerMailOk = await sendNotificationMail('utas_visszaigazolas', payload);
-    return { ...booking, __mailOk: mailOk, __passengerMailOk: passengerMailOk };
+    return { ...(insertedBooking || booking), __mailOk: mailOk, __passengerMailOk: passengerMailOk };
   }
 
   async function submitRating(trip, form, tipus) {
