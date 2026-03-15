@@ -887,6 +887,7 @@ const App = (() => {
     const profileUrl = profileFile ? await uploadPublicFile(profileBucket, profileFile, user?.id || 'anon-profile') : '';
     const carImageUrls = [];
     for (const file of carFiles) carImageUrls.push(await uploadPublicFile(carBucket, file, user?.id || 'anon-car'));
+    const isAdminTrip = !!currentViewer.admin;
     const payload = {
       user_id: user?.id || null,
       nev: fd.get('driverName')?.toString().trim() || '',
@@ -903,7 +904,8 @@ const App = (() => {
       auto_tipus: fd.get('carType')?.toString().trim() || '',
       ar: Number(fd.get('price') || 0),
       megjegyzes: fd.get('note')?.toString().trim() || '',
-      statusz: 'Függőben',
+      statusz: isAdminTrip ? 'Jóváhagyva' : 'Függőben',
+      approved: isAdminTrip,
       fizetesi_modok: payment.length ? payment : ['cash'],
       bankszamla: fd.get('bankAccount')?.toString().trim() || '',
       profil_kep_url: profileUrl,
@@ -912,10 +914,11 @@ const App = (() => {
       ertekeles_db: 0
     };
     if (!payload.nev || !payload.indulas || !payload.erkezes) throw new Error('Tölts ki minden kötelező mezőt.');
-    const { error } = await sb.from(tableTrips).insert([payload]);
+    const { data: insertedTrip, error } = await sb.from(tableTrips).insert([payload]).select('*').single();
     if (error) throw error;
-    const mailOk = await sendNotificationMail('uj_fuvar', payload);
-    return mailOk;
+    const notifyPayload = insertedTrip ? { ...payload, id: insertedTrip.id, trip_id: insertedTrip.id, fuvar_id: insertedTrip.id } : payload;
+    const mailOk = await sendNotificationMail('uj_fuvar', notifyPayload);
+    return { mailOk, approvedNow: isAdminTrip, insertedTrip: insertedTrip || null };
   }
 
   async function submitBooking(trip, form) {
@@ -1314,12 +1317,18 @@ const App = (() => {
       const msg = document.getElementById('tripFormMsg');
       msg.textContent = 'Mentés...';
       try {
-        const mailOk = await submitTrip(form);
-        msg.textContent = !APP_CONFIG.notificationFunctionUrl
-          ? 'A fuvar rögzítve lett. Admin jóváhagyás után megjelenik a listában.'
-          : (mailOk
-              ? 'A fuvar rögzítve lett. Az admin e-mail értesítés is sikeresen elindult.'
-              : 'A fuvar rögzítve lett, de az e-mail értesítés nem ment ki. Ellenőrizd a Supabase Edge Function logokat és a Resend beállításokat.');
+        const submitResult = await submitTrip(form);
+        const mailOk = !!(typeof submitResult === 'object' ? submitResult.mailOk : submitResult);
+        const approvedNow = !!(submitResult && typeof submitResult === 'object' && submitResult.approvedNow);
+        msg.textContent = approvedNow
+          ? (mailOk
+              ? 'A fuvar sikeresen mentve és azonnal meg is jelent a listában.'
+              : 'A fuvar sikeresen mentve és azonnal meg is jelent a listában. Az e-mail értesítés most nem ment ki.')
+          : (!APP_CONFIG.notificationFunctionUrl
+              ? 'A fuvar rögzítve lett. Admin jóváhagyás után megjelenik a listában.'
+              : (mailOk
+                  ? 'A fuvar rögzítve lett. Az admin e-mail értesítés is sikeresen elindult.'
+                  : 'A fuvar rögzítve lett. Az e-mail értesítés most nem ment ki, de a fuvar mentése sikeres volt.'));
         form.reset();
         form.querySelector('[name="contactEmail"]').value = user?.email || '';
         if (driverNameInput) driverNameInput.value = user?.user_metadata?.name || user?.user_metadata?.full_name || (user?.email ? String(user.email).split('@')[0] : '');
