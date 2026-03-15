@@ -1365,6 +1365,25 @@ const App = (() => {
     });
   }
 
+
+
+  function focusTripCardById(tripId, root = document) {
+    if (!tripId) return false;
+    const selector = `[data-trip-id="${CSS.escape(String(tripId))}"]`;
+    const card = root.querySelector(selector);
+    if (!card) return false;
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const prevBoxShadow = card.style.boxShadow;
+    const prevOutline = card.style.outline;
+    card.style.outline = '3px solid rgba(15,118,110,.55)';
+    card.style.boxShadow = '0 0 0 6px rgba(15,118,110,.16)';
+    setTimeout(() => {
+      card.style.outline = prevOutline;
+      card.style.boxShadow = prevBoxShadow;
+    }, 5000);
+    return true;
+  }
+
   async function initAdminPage() {
     if (!document.getElementById('adminTrips')) return;
     const ok = await AppAuth.requireAdmin();
@@ -1421,6 +1440,19 @@ const App = (() => {
       const tripMap = Object.fromEntries(trips.map(t => [String(t.id), t]));
       bookingsWrap.innerHTML = bookings.length ? bookings.map(b => bookingCard(b, tripMap)).join('') : '<div class="empty-state">Még nincs foglalás.</div>';
       if (!APP_CONFIG.notificationFunctionUrl) bookingsWrap.insertAdjacentHTML('beforebegin', notificationNotice('booking'));
+
+      const params = new URLSearchParams(location.search);
+      const targetTripId = params.get('tripId') || '';
+      if (targetTripId) {
+        const focused = focusTripCardById(targetTripId, tripsWrap);
+        if (!focused) {
+          const note = document.createElement('div');
+          note.className = 'notice warn';
+          note.style.marginBottom = '16px';
+          note.textContent = `A keresett fuvar (${targetTripId}) nem található ezen az oldalon.`;
+          tripsWrap.before(note);
+        }
+      }
     } catch (_) {
       tripsWrap.innerHTML = '<div class="empty-state">A fuvarok betöltése nem sikerült.</div>';
       bookingsWrap.innerHTML = '<div class="empty-state">A foglalások betöltése nem sikerült.</div>';
