@@ -9,7 +9,7 @@ const TWILIO_FROM_NUMBER = Deno.env.get('TWILIO_FROM_NUMBER') || ''
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID') || ''
 const ONESIGNAL_API_KEY = Deno.env.get('ONESIGNAL_API_KEY') || ''
-const SITE_URL = Deno.env.get('SITE_URL') || 'https://fuvarvelunk.hu'
+const SITE_URL = (Deno.env.get('SITE_URL') || 'https://fuvarvelunk.hu').replace(/\/$/, '')
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -25,34 +25,6 @@ function esc(value: unknown) {
     .replaceAll("'", '&#39;')
 }
 
-function actionButton(url: string, label: string) {
-  return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 18px;margin:8px 8px 0 0;background:#0f766e;color:#ffffff !important;text-decoration:none;border-radius:10px;font-weight:700">${esc(label)}</a>`
-}
-
-function rawLink(url: string, label = 'Megnyitás') {
-  return `<p style="margin:10px 0 0"><strong>${esc(label)}:</strong><br><a href="${esc(url)}" target="_blank" rel="noopener noreferrer" style="color:#0f766e;word-break:break-all">${esc(url)}</a></p>`
-}
-
-function emailLayout(title: string, introHtml: string, detailsHtml: string, buttons: string[] = [], extraHtml = '', linksHtml = '') {
-  return `
-    <div style="font-family:Arial,Helvetica,sans-serif;background:#f6f8fb;padding:24px;color:#111827">
-      <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden">
-        <div style="background:#0f172a;color:#ffffff;padding:20px 24px">
-          <div style="font-size:13px;opacity:.85;margin-bottom:6px">FuvarVelünk értesítés</div>
-          <h2 style="margin:0;font-size:24px;line-height:1.3">${title}</h2>
-        </div>
-        <div style="padding:24px">
-          <div style="font-size:16px;line-height:1.6">${introHtml}</div>
-          <div style="margin-top:18px;padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb;font-size:15px;line-height:1.7">${detailsHtml}</div>
-          ${buttons.length ? `<div style="margin-top:20px">${buttons.join('')}</div>` : ''}
-          ${linksHtml ? `<div style="margin-top:18px;padding:14px;border:1px dashed #cbd5e1;border-radius:12px;background:#fff;font-size:14px;line-height:1.6">${linksHtml}</div>` : ''}
-          ${extraHtml ? `<div style="margin-top:18px;color:#4b5563;font-size:14px;line-height:1.6">${extraHtml}</div>` : ''}
-        </div>
-      </div>
-    </div>
-  `
-}
-
 function normPhone(value: unknown) {
   const raw = String(value ?? '').trim()
   if (!raw) return ''
@@ -64,6 +36,39 @@ function normPhone(value: unknown) {
 
 function normExternalId(value: unknown) {
   return String(value ?? '').trim().toLowerCase()
+}
+
+function buildUrl(path: string, params: Record<string, string | undefined> = {}, hash = '') {
+  const url = new URL(path.startsWith('http') ? path : `${SITE_URL}${path.startsWith('/') ? '' : '/'}${path}`)
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) url.searchParams.set(key, value)
+  })
+  if (hash) url.hash = hash.startsWith('#') ? hash.slice(1) : hash
+  return url.toString()
+}
+
+function ctaButton(label: string, href: string, tone: 'primary' | 'success' | 'dark' = 'primary') {
+  const bg = tone === 'success' ? '#16a34a' : tone === 'dark' ? '#111827' : '#2563eb'
+  return `<div style="margin:16px 0 10px"><a href="${esc(href)}" style="display:inline-block;background:${bg};color:#ffffff;text-decoration:none;padding:14px 18px;border-radius:12px;font-weight:700">${esc(label)}</a></div>`
+}
+
+function directLinkBlock(label: string, href: string) {
+  return `
+    <div style="margin:14px 0 0;padding:14px;border:1px solid #dbeafe;background:#f8fbff;border-radius:12px">
+      <div style="font-weight:700;margin-bottom:8px">${esc(label)}</div>
+      <div style="word-break:break-all"><a href="${esc(href)}">${esc(href)}</a></div>
+    </div>`
+}
+
+function emailLayout(title: string, introHtml: string, detailsHtml: string, ctas: { label: string; href: string; tone?: 'primary'|'success'|'dark'; directLabel?: string }[] = []) {
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.6;color:#111827;max-width:700px;margin:0 auto;padding:24px;background:#ffffff">
+      <div style="font-size:28px;font-weight:800;line-height:1.2;margin:0 0 18px">${esc(title)}</div>
+      <div style="font-size:16px;margin:0 0 18px">${introHtml}</div>
+      <div style="padding:18px;border:1px solid #e5e7eb;border-radius:14px;background:#fafafa">${detailsHtml}</div>
+      ${ctas.map(cta => `${ctaButton(cta.label, cta.href, cta.tone || 'primary')}${directLinkBlock(cta.directLabel || 'Közvetlen link', cta.href)}`).join('')}
+      <p style="margin:18px 0 0;color:#4b5563;font-size:14px">Ha a gomb nem működik, használd a közvetlen linket. A link a megfelelő oldalra visz, hogy ne kelljen keresgélni a FuvarVelünk oldalon.</p>
+    </div>`
 }
 
 async function sendMail(to: string, subject: string, html: string) {
@@ -158,8 +163,6 @@ async function sendPush(externalIds: string[], heading: string, message: string,
   }
 }
 
-
-
 function createAdminClient() {
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
@@ -213,10 +216,11 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
   const driverName = esc(payload.sofor_nev || payload.driver_name || payload.nev || 'Sofőr')
   const seats = esc(payload.foglalt_helyek || payload.helyek || 1)
   const payText = esc(payload.fizetesi_mod_text || payload.fizetesi_mod || '')
-  const tripId = String(payload.fuvar_id || payload.trip_id || '').trim()
-  const tripUrl = tripId ? `${SITE_URL}/trip.html?id=${encodeURIComponent(tripId)}` : SITE_URL
-  const bookingUrl = tripId ? `${SITE_URL}/trip.html?id=${encodeURIComponent(tripId)}#driverBookingsSection` : `${SITE_URL}/fuvarok.html`
-  const adminApprovalUrl = tripId ? `${SITE_URL}/admin.html?tripId=${encodeURIComponent(tripId)}` : `${SITE_URL}/admin.html`
+  const tripId = String(payload.fuvar_id || payload.trip_id || payload.id || '').trim()
+  const bookingId = String(payload.foglalas_id || payload.booking_id || '').trim()
+  const tripUrl = tripId ? buildUrl('/trip.html', { id: tripId, ...(bookingId ? { bookingId } : {}) }) : SITE_URL
+  const driverBookingsUrl = tripId ? buildUrl('/trip.html', { id: tripId, ...(bookingId ? { bookingId } : {}) }, 'driverBookingsSection') : tripUrl
+  const adminUrl = buildUrl('/admin.html', { ...(tripId ? { tripId } : {}), ...(bookingId ? { bookingId } : {}) })
 
   let emails: EmailItem[] = []
   let sms: SmsItem[] = []
@@ -229,11 +233,9 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
         subject: `Új foglalás érkezett: ${passengerName}`,
         html: emailLayout(
           'Új foglalás érkezett',
-          `<p>Új foglalás érkezett a fuvarodra. A gombbal azonnal megnyithatod a foglalásokat.</p>`,
+          `Új utas foglalt a fuvarodra. Az alábbi link rögtön a megfelelő foglaláshoz visz.`,
           `<p><strong>Foglaló:</strong> ${passengerName}</p><p><strong>Utas e-mail:</strong> ${esc(payload.utas_email || payload.email || '')}</p><p><strong>Telefon:</strong> ${esc(payload.telefon || payload.utas_telefon || '')}</p><p><strong>Foglalt helyek:</strong> ${seats}</p><p><strong>Fizetési mód:</strong> ${payText}</p><p><strong>Fuvar:</strong> ${route}</p><p><strong>Dátum:</strong> ${dateTime}</p>`,
-          [actionButton(bookingUrl, 'Foglalás megnyitása'), actionButton(tripUrl, 'Fuvar megnyitása')],
-          'Bejelentkezés után rögtön a megfelelő fuvaroldal nyílik meg.',
-          rawLink(bookingUrl, 'Közvetlen link a foglalásokhoz') + rawLink(tripUrl, 'Közvetlen link a fuvarhoz')
+          [{ label: 'Foglalás megnyitása', href: driverBookingsUrl, tone: 'success', directLabel: 'Közvetlen link a foglaláshoz' }]
         )
       }]
       sms = [{
@@ -244,7 +246,7 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
         externalIds: [String(payload.sofor_email || '')],
         heading: 'Új foglalás érkezett',
         message: `${String(payload.indulas || '')} → ${String(payload.erkezes || '')} · ${String(payload.utas_nev || payload.nev || 'Utas')}`,
-        url: tripUrl
+        url: driverBookingsUrl
       }]
       break
 
@@ -255,11 +257,9 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
           subject: `Foglalás visszaigazolás: ${String(payload.indulas || '')} → ${String(payload.erkezes || '')}`,
           html: emailLayout(
             'Sikeres foglalás',
-            `<p>Kedves ${passengerName}! A foglalásod rögzítve lett.</p>`,
+            `Kedves ${passengerName}! A foglalásod rögzítve lett. Az alábbi link közvetlenül a fuvarodhoz visz.`,
             `<p><strong>Fuvar:</strong> ${route}</p><p><strong>Dátum:</strong> ${dateTime}</p><p><strong>Sofőr:</strong> ${driverName}</p><p><strong>Fizetési mód:</strong> ${payText}</p><p><strong>Foglalt helyek:</strong> ${seats}</p><p><strong>Kapcsolat:</strong> ${esc(payload.sofor_email || '')}</p>`,
-            [actionButton(tripUrl, 'Foglalásom megnyitása')],
-            'Az oldalon rögtön látni fogod, melyik fuvarra foglaltál.',
-            rawLink(tripUrl, 'Közvetlen link a foglalásodhoz')
+            [{ label: 'Fuvar megnyitása', href: tripUrl, directLabel: 'Közvetlen link a fuvarhoz' }]
           )
         }]
       }
@@ -272,11 +272,9 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
           subject: `Foglalás jóváhagyva: ${String(payload.indulas || '')} → ${String(payload.erkezes || '')}`,
           html: emailLayout(
             'Foglalás jóváhagyva',
-            `<p>Kedves ${passengerName}! A sofőr jóváhagyta a foglalásodat.</p>`,
+            `Kedves ${passengerName}! A sofőr jóváhagyta a foglalásodat. Az alábbi link rögtön a saját foglalásodhoz visz.`,
             `<p><strong>Fuvar:</strong> ${route}</p><p><strong>Dátum:</strong> ${dateTime}</p><p><strong>Sofőr:</strong> ${driverName}</p><p><strong>Kapcsolat:</strong> ${esc(payload.sofor_email || '')}${payload.sofor_telefon ? ' · ' + esc(payload.sofor_telefon) : ''}</p>`,
-            [actionButton(tripUrl, 'Fuvar megnyitása')],
-            'A megnyitott oldalon rögtön a saját foglalásodhoz tartozó fuvar látszik.',
-            rawLink(tripUrl, 'Közvetlen link a fuvarhoz')
+            [{ label: 'Foglalásom megnyitása', href: tripUrl, tone: 'success', directLabel: 'Közvetlen link a foglalásomhoz' }]
           )
         }]
       }
@@ -299,11 +297,9 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
           subject: `Fizetés visszaigazolva: ${String(payload.indulas || '')} → ${String(payload.erkezes || '')}`,
           html: emailLayout(
             'Fizetés visszaigazolva',
-            `<p>Kedves ${passengerName}! A sofőr fizetettnek jelölte a foglalásodat.</p>`,
-            `<p><strong>Fuvar:</strong> ${route}</p><p><strong>Dátum:</strong> ${dateTime}</p><p><strong>Megjegyzés:</strong> Kérjük, jelenj meg indulás előtt legalább 10 perccel.</p>`,
-            [actionButton(tripUrl, 'Fuvar megnyitása')],
-            'Így nem kell keresgélned, az e-mailből rögtön a megfelelő fuvarra jutsz.',
-            rawLink(tripUrl, 'Közvetlen link a fuvarhoz')
+            `Kedves ${passengerName}! A sofőr fizetettnek jelölte a foglalásodat.`,
+            `<p><strong>Fuvar:</strong> ${route}</p><p><strong>Dátum:</strong> ${dateTime}</p><p>Kérjük, jelenj meg indulás előtt legalább 10 perccel.</p>`,
+            [{ label: 'Fuvar megnyitása', href: tripUrl, directLabel: 'Közvetlen link a fuvarhoz' }]
           )
         }]
       }
@@ -324,12 +320,10 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
         to: String(payload.sofor_email || adminEmail),
         subject: `Fuvar indul 2 órán belül: ${String(payload.indulas || '')} → ${String(payload.erkezes || '')}`,
         html: emailLayout(
-          'Fuvar indul 2 órán belül',
-          `<p>Kedves ${driverName}! A fuvarod hamarosan indul.</p>`,
+          'Indulási emlékeztető',
+          `Kedves ${driverName}! A fuvarod 2 órán belül indul.`,
           `<p><strong>Fuvar:</strong> ${route}</p><p><strong>Dátum:</strong> ${dateTime}</p><p><strong>Foglalások száma:</strong> ${esc(payload.foglalas_db || 0)}</p>`,
-          [actionButton(bookingUrl, 'Foglalások megnyitása'), actionButton(tripUrl, 'Fuvar megnyitása')],
-          'Egy kattintással megnézheted a fuvar részleteit és a foglalásokat.',
-          rawLink(bookingUrl, 'Közvetlen link a foglalásokhoz') + rawLink(tripUrl, 'Közvetlen link a fuvarhoz')
+          [{ label: 'Fuvar és foglalások megnyitása', href: driverBookingsUrl, directLabel: 'Közvetlen link a fuvarhoz' }]
         )
       }]
       sms = [{
@@ -340,7 +334,7 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
         externalIds: [String(payload.sofor_email || '')],
         heading: 'Fuvar indul 2 órán belül',
         message: `${String(payload.indulas || '')} → ${String(payload.erkezes || '')} · foglalások: ${String(payload.foglalas_db || 0)}`,
-        url: tripUrl
+        url: driverBookingsUrl
       }]
       break
 
@@ -351,11 +345,9 @@ function buildNotification(kind: string, payload: Record<string, unknown>, admin
         subject: `Új fuvar vár jóváhagyásra: ${String(payload.indulas || '')} → ${String(payload.erkezes || payload.cel || '')}`,
         html: emailLayout(
           'Új fuvar vár jóváhagyásra',
-          `<p>Új fuvar érkezett jóváhagyásra. A gombbal rögtön megnyitható az admin felület.</p>`,
+          'Új fuvar érkezett a rendszerbe. Az alábbi link közvetlenül az admin felületen a megfelelő fuvarhoz visz.',
           `<p><strong>Fuvar:</strong> ${route}</p><p><strong>Dátum:</strong> ${dateTime}</p><p><strong>Sofőr:</strong> ${esc(payload.nev || payload.sofor_nev || '')} (${esc(payload.email || payload.sofor_email || '')})</p><p><strong>Telefonszám:</strong> ${esc(payload.telefon || '')}</p>`,
-          [actionButton(adminApprovalUrl, 'Jóváhagyás megnyitása'), actionButton(tripUrl, 'Fuvar megnyitása')],
-          'Biztonság miatt a jóváhagyás továbbra is bejelentkezés után történik.',
-          rawLink(adminApprovalUrl, 'Közvetlen link a jóváhagyáshoz') + rawLink(tripUrl, 'Közvetlen link a fuvarhoz')
+          [{ label: 'Jóváhagyás megnyitása', href: adminUrl, tone: 'dark', directLabel: 'Közvetlen link a jóváhagyáshoz' }]
         )
       }]
       break
