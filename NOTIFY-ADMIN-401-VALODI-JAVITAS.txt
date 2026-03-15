@@ -1,0 +1,1 @@
+A notify-admin hivasba bekerult az apikey es az Authorization header a js/app.js es js/app_backup.js fajlokban.

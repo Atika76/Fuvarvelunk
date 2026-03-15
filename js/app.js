@@ -683,7 +683,11 @@ const App = (() => {
       const adminEmail = await AppAuth.fetchAdminEmail();
       const res = await fetch(APP_CONFIG.notificationFunctionUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': APP_CONFIG.supabaseKey,
+          'Authorization': `Bearer ${APP_CONFIG.supabaseKey}`
+        },
         body: JSON.stringify({ kind, payload, adminEmail })
       });
       let data = null;
@@ -826,7 +830,7 @@ const App = (() => {
     const showPaid = !isLocked && String(b.fizetesi_allapot || '').toLowerCase() !== 'fizetve';
     const showDelete = !!currentViewer.admin || !isLocked;
     return `
-      <article class="card admin-item${compact ? ' driver-booking-card' : ''}">
+      <article class="card admin-item${compact ? ' driver-booking-card' : ''}" data-booking-id="${b.id}" data-trip-id="${b.fuvar_id ?? b.trip_id ?? ''}">
         <div>
           <div class="inline-pills">${statusBadge(b.foglalasi_allapot || 'Új')} ${statusBadge(b.fizetesi_allapot || 'Függőben')}</div>
           <h3 style="margin:12px 0 8px">${escapeHtml(trip.indulas || '')} → ${escapeHtml(trip.erkezes || '')}</h3>
@@ -1365,6 +1369,84 @@ const App = (() => {
     });
   }
 
+  function applyFocusStyles() {
+    if (document.getElementById('deepLinkFocusStyle')) return;
+    const style = document.createElement('style');
+    style.id = 'deepLinkFocusStyle';
+    style.textContent = `
+      .deep-link-focus{
+        box-shadow: 0 0 0 4px rgba(37,99,235,.22), 0 16px 40px rgba(37,99,235,.18) !important;
+        border-color:#2563eb !important;
+        scroll-margin-top:110px;
+      }
+      .deep-link-banner{
+        margin:0 0 18px;
+        padding:14px 16px;
+        border-radius:14px;
+        background:#eff6ff;
+        border:1px solid #bfdbfe;
+        color:#1e3a8a;
+        font-weight:700;
+      }`;
+    document.head.appendChild(style);
+  }
+
+  function focusDeepLinkedItem(el, message = '') {
+    if (!el) return;
+    applyFocusStyles();
+    const existing = document.querySelector('.deep-link-banner');
+    if (existing) existing.remove();
+    if (message) {
+      const banner = document.createElement('div');
+      banner.className = 'deep-link-banner';
+      banner.textContent = message;
+      el.parentElement?.insertBefore(banner, el);
+    }
+    document.querySelectorAll('.deep-link-focus').forEach(node => node.classList.remove('deep-link-focus'));
+    el.classList.add('deep-link-focus');
+    try {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (_) {
+      el.scrollIntoView();
+    }
+  }
+
+  function focusAdminTarget(tripsWrap, bookingsWrap) {
+    const params = new URLSearchParams(location.search);
+    const bookingId = params.get('bookingId');
+    const tripId = params.get('tripId');
+    if (bookingId) {
+      const bookingEl = bookingsWrap?.querySelector(`[data-booking-id="${CSS.escape(bookingId)}"]`);
+      if (bookingEl) {
+        focusDeepLinkedItem(bookingEl, 'Az e-mailből megnyitott foglalás itt van.');
+        return;
+      }
+    }
+    if (tripId) {
+      const tripEl = tripsWrap?.querySelector(`[data-trip-id="${CSS.escape(tripId)}"]`);
+      if (tripEl) {
+        focusDeepLinkedItem(tripEl, 'Az e-mailből megnyitott fuvar itt van.');
+      }
+    }
+  }
+
+  function focusTripPageTarget() {
+    const params = new URLSearchParams(location.search);
+    const bookingId = params.get('bookingId');
+    const tripId = params.get('id');
+    if (bookingId) {
+      const bookingEl = document.querySelector(`[data-booking-id="${CSS.escape(bookingId)}"]`);
+      if (bookingEl) {
+        focusDeepLinkedItem(bookingEl, 'Az e-mailből megnyitott foglalás itt van.');
+        return;
+      }
+    }
+    if (location.hash === '#driverBookingsSection') {
+      const section = document.getElementById('driverBookingsSection');
+      if (section) focusDeepLinkedItem(section, tripId ? `A(z) ${tripId} azonosítójú fuvar foglalásai itt vannak.` : 'A fuvar foglalásai itt vannak.');
+    }
+  }
+
   async function initAdminPage() {
     if (!document.getElementById('adminTrips')) return;
     const ok = await AppAuth.requireAdmin();
@@ -1421,6 +1503,7 @@ const App = (() => {
       const tripMap = Object.fromEntries(trips.map(t => [String(t.id), t]));
       bookingsWrap.innerHTML = bookings.length ? bookings.map(b => bookingCard(b, tripMap)).join('') : '<div class="empty-state">Még nincs foglalás.</div>';
       if (!APP_CONFIG.notificationFunctionUrl) bookingsWrap.insertAdjacentHTML('beforebegin', notificationNotice('booking'));
+      focusAdminTarget(tripsWrap, bookingsWrap);
     } catch (_) {
       tripsWrap.innerHTML = '<div class="empty-state">A fuvarok betöltése nem sikerült.</div>';
       bookingsWrap.innerHTML = '<div class="empty-state">A foglalások betöltése nem sikerült.</div>';
@@ -1663,6 +1746,7 @@ const App = (() => {
         wrap.insertAdjacentHTML('beforeend', buildPassengerBookingStatusSection(passengerBooking, trip));
       }
     }
+    focusTripPageTarget();
     if (ownTrip) {
       document.getElementById('driverRatingForm')?.classList.add('hidden');
       document.getElementById('tripRatingForm')?.classList.add('hidden');
