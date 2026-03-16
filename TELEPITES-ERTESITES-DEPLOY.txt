@@ -1,0 +1,4 @@
+1. A ZIP feltöltése után a Supabase notify-admin functiont újra deployolni kell.
+2. PowerShell: npx supabase functions deploy notify-admin --no-verify-jwt
+3. A Supabase Secrets között maradjon: RESEND_API_KEY, ADMIN_EMAIL, ONESIGNAL_APP_ID, ONESIGNAL_API_KEY
+4. Mobilon a menü most hamburger gombbal nyílik, a kijelentkezés onnan érhető el.

@@ -1,6 +1,6 @@
 window.APP_CONFIG = {
-  brandName: 'FuvarVelünk',
-  companyName: 'FuvarVelünk',
+  brandName: 'FuvarVelünk.hu',
+  companyName: 'FuvarVelünk.hu',
   contactEmail: 'cegweb26@gmail.com',
   adminEmail: 'cegweb26@gmail.com',
   siteUrl: 'https://fuvarvelunk.hu/',
