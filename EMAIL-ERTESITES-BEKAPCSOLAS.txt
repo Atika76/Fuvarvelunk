@@ -1,0 +1,8 @@
+FuvarVelünk e-mail értesítés bekapcsolás
+
+1. Supabase Edge Function neve: notify-admin
+2. Edge Function URL a projektben: https://qkppqjcazakocxgxtlzc.supabase.co/functions/v1/notify-admin
+3. Supabase Edge Functions / Secrets alatt add hozzá:
+   RESEND_API_KEY = a Resend API kulcsod
+4. A js/config.js fájlban az URL már be van állítva.
+5. Új fuvarnál admin értesítés megy, új foglalásnál a sofőr kap e-mailt.

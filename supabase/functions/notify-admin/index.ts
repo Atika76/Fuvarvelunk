@@ -1,0 +1,391 @@
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || ''
+const ADMIN_EMAIL_SECRET = Deno.env.get('ADMIN_EMAIL') || ''
+const RESEND_FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'onboarding@resend.dev'
+const RESEND_FROM_NAME = Deno.env.get('RESEND_FROM_NAME') || 'FuvarVelünk'
+const TWILIO_ACCOUNT_SID = Deno.env.get('TWILIO_ACCOUNT_SID') || ''
+const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN') || ''
+const TWILIO_FROM_NUMBER = Deno.env.get('TWILIO_FROM_NUMBER') || ''
+const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID') || ''
+const ONESIGNAL_API_KEY = Deno.env.get('ONESIGNAL_API_KEY') || ''
+const SITE_URL = (Deno.env.get('SITE_URL') || 'https://fuvarvelunk.hu').replace(/\/$/, '')
+const FALLBACK_ADMIN_EMAIL = 'cegweb26@gmail.com'
+
+const cors = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+function esc(value: unknown) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function normPhone(value: unknown) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  if (raw.startsWith('+')) return '+' + raw.slice(1).replace(/\D/g, '')
+  if (raw.startsWith('00')) return '+' + raw.slice(2).replace(/\D/g, '')
+  if (raw.startsWith('06')) return '+36' + raw.slice(2).replace(/\D/g, '')
+  return raw.replace(/\D/g, '')
+}
+
+function normExternalId(value: unknown) {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+async function sendMail(to: string, subject: string, html: string) {
+  const safeTo = String(to || '').trim()
+
+  if (!RESEND_API_KEY || !safeTo) {
+    console.log('MAIL_SKIP:', JSON.stringify({
+      reason: 'missing_mail_config_or_recipient',
+      has_key: !!RESEND_API_KEY,
+      to: safeTo,
+      subject,
+    }))
+    return { ok: false, skipped: true, reason: 'missing_mail_config_or_recipient', channel: 'email', to: safeTo, subject }
+  }
+
+  try {
+    const resend = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: `${RESEND_FROM_NAME} <${RESEND_FROM_EMAIL}>`,
+        to: [safeTo],
+        subject,
+        html,
+      })
+    })
+
+    const raw = await resend.text()
+    console.log('RESEND_STATUS:', resend.status)
+    console.log('RESEND_RESPONSE:', raw)
+    console.log('RESEND_FROM:', `${RESEND_FROM_NAME} <${RESEND_FROM_EMAIL}>`)
+    console.log('RESEND_TO:', safeTo)
+    console.log('RESEND_SUBJECT:', subject)
+
+    return {
+      ok: resend.ok,
+      skipped: false,
+      channel: 'email',
+      to: safeTo,
+      subject,
+      status: resend.status,
+      data: raw
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('RESEND_FETCH_ERROR:', message)
+    return {
+      ok: false,
+      skipped: false,
+      channel: 'email',
+      to: safeTo,
+      subject,
+      status: 500,
+      data: message
+    }
+  }
+}
+
+async function sendSms(to: string, body: string) {
+  const phone = normPhone(to)
+  if (!phone) return { ok: false, skipped: true, reason: 'missing_phone', channel: 'sms' }
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER) {
+    return { ok: false, skipped: true, reason: 'missing_twilio_config', channel: 'sms', to: phone }
+  }
+
+  try {
+    const resp = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        From: TWILIO_FROM_NUMBER,
+        To: phone,
+        Body: body
+      }).toString(),
+    })
+
+    const data = await resp.text()
+    return { ok: resp.ok, skipped: false, channel: 'sms', to: phone, body, status: resp.status, data }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('TWILIO_ERROR:', message)
+    return { ok: false, skipped: false, channel: 'sms', to: phone, body, status: 500, data: message }
+  }
+}
+
+async function sendPush(externalIds: string[], heading: string, message: string, url?: string) {
+  const ids = [...new Set((externalIds || []).map(normExternalId).filter(Boolean))]
+  if (!ids.length) return { ok: false, skipped: true, reason: 'missing_external_ids', channel: 'push' }
+  if (!ONESIGNAL_APP_ID || !ONESIGNAL_API_KEY) {
+    return { ok: false, skipped: true, reason: 'missing_onesignal_config', channel: 'push', ids }
+  }
+
+  try {
+    const resp = await fetch('https://api.onesignal.com/notifications', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Key ${ONESIGNAL_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        app_id: ONESIGNAL_APP_ID,
+        target_channel: 'push',
+        include_aliases: { external_id: ids },
+        headings: { en: heading, hu: heading },
+        contents: { en: message, hu: message },
+        url: url || SITE_URL,
+        web_url: url || SITE_URL,
+      })
+    })
+
+    const data = await resp.text()
+    console.log('ONESIGNAL_STATUS:', resp.status)
+    console.log('ONESIGNAL_RESPONSE:', data)
+    return { ok: resp.ok, skipped: false, channel: 'push', ids, heading, message, status: resp.status, data }
+  } catch (err) {
+    const messageText = err instanceof Error ? err.message : String(err)
+    console.error('ONESIGNAL_ERROR:', messageText)
+    return { ok: false, skipped: false, channel: 'push', ids, heading, message, status: 500, data: messageText }
+  }
+}
+
+function createAdminClient() {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+  if (!supabaseUrl || !serviceRoleKey) return null
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+}
+
+async function writeLog(kind: string, payload: Record<string, unknown>, subject: string, results: any[]) {
+  try {
+    const admin = createAdminClient()
+    if (!admin) return
+    const emailResult = (results || []).find((x: any) => x?.channel === 'email')
+    const smsResult = (results || []).find((x: any) => x?.channel === 'sms')
+    const pushResult = (results || []).find((x: any) => x?.channel === 'push')
+    const recipient = String(
+      payload.sofor_email || payload.utas_email || payload.email || ADMIN_EMAIL_SECRET || FALLBACK_ADMIN_EMAIL || ''
+    )
+
+    await admin.from('email_naplo').insert([{
+      tipus: kind || 'ismeretlen',
+      cel_email: recipient,
+      statusz: emailResult?.ok ? 'elkuldve' : (emailResult?.skipped ? 'kihagyva' : 'sikertelen'),
+      sikeres: !!emailResult?.ok,
+      targy: subject || kind || 'ertesites',
+      payload: {
+        ...(payload || {}),
+        email_status: emailResult?.status || null,
+        email_response: emailResult?.data || null,
+        email_to: emailResult?.to || null,
+        email_subject: emailResult?.subject || null,
+        from_email: RESEND_FROM_EMAIL,
+        sms_ok: !!smsResult?.ok,
+        sms_skipped: !!smsResult?.skipped,
+        push_ok: !!pushResult?.ok,
+        push_skipped: !!pushResult?.skipped,
+        push_status: pushResult?.status || null,
+        push_response: pushResult?.data || null,
+      },
+    }])
+  } catch (err) {
+    console.warn('email_naplo log hiba:', err)
+  }
+}
+
+type EmailItem = { to: string; subject: string; html: string }
+type SmsItem = { to: string; body: string }
+type PushItem = { externalIds: string[]; heading: string; message: string; url?: string }
+
+function buildNotification(kind: string, payload: Record<string, unknown>, adminEmail: string) {
+  const route = `${esc(payload.indulas)} → ${esc(payload.erkezes || payload.cel || '')}`
+  const dateTime = `${esc(payload.datum)} ${esc(payload.ido)}`.trim()
+  const passengerName = esc(payload.utas_nev || payload.nev || 'Utas')
+  const driverName = esc(payload.sofor_nev || payload.driver_name || payload.nev || 'Sofőr')
+  const seats = esc(payload.foglalt_helyek || payload.helyek || 1)
+  const payText = esc(payload.fizetesi_mod_text || payload.fizetesi_mod || '')
+  const tripId = String(payload.fuvar_id || payload.trip_id || payload.id || '').trim()
+  const tripUrl = tripId ? `${SITE_URL}/trip.html?id=${encodeURIComponent(tripId)}` : SITE_URL
+
+  let emails: EmailItem[] = []
+  let sms: SmsItem[] = []
+  let push: PushItem[] = []
+
+  switch (kind) {
+    case 'uj_foglalas':
+      emails = [{
+        to: String(payload.sofor_email || adminEmail),
+        subject: `Új foglalás érkezett: ${passengerName}`,
+        html: `<h2>Új foglalás érkezett</h2><p>Foglaló: <strong>${passengerName}</strong></p><p>Utas e-mail: ${esc(payload.utas_email || payload.email || '')}</p><p>Telefon: ${esc(payload.telefon || payload.utas_telefon || '')}</p><p>Foglalt helyek: ${seats}</p><p>Fizetési mód: ${payText}</p><p>Sofőr: ${driverName} (${esc(payload.sofor_email || '')})</p><p>Fuvar: ${route}</p><p>Dátum: ${dateTime}</p>`
+      }]
+      sms = [{
+        to: String(payload.sofor_telefon || ''),
+        body: `FuvarVelünk: új foglalás érkezett a ${String(payload.indulas || '')} → ${String(payload.erkezes || '')} fuvarodra. Utas: ${String(payload.utas_nev || payload.nev || '')}, helyek: ${String(payload.foglalt_helyek || 1)}.`
+      }]
+      push = [{
+        externalIds: [String(payload.sofor_email || '')],
+        heading: 'Új foglalás érkezett',
+        message: `${String(payload.indulas || '')} → ${String(payload.erkezes || '')} · ${String(payload.utas_nev || payload.nev || 'Utas')}`,
+        url: tripUrl
+      }]
+      break
+
+    case 'utas_visszaigazolas':
+      if (payload.utas_email || payload.email) {
+        emails = [{
+          to: String(payload.utas_email || payload.email),
+          subject: `Foglalás visszaigazolás: ${String(payload.indulas || '')} → ${String(payload.erkezes || '')}`,
+          html: `<h2>Sikeres foglalás</h2><p>Kedves ${passengerName}!</p><p>A foglalásod rögzítve lett a következő útra:</p><p><strong>${route}</strong></p><p>Dátum: ${dateTime}</p><p>Sofőr: ${driverName}</p><p>Fizetési mód: ${payText}</p><p>Foglalt helyek: ${seats}</p><p>Kapcsolat: ${esc(payload.sofor_email || '')}</p>`
+        }]
+      }
+      break
+
+    case 'foglalas_jovahagyva':
+      if (payload.utas_email || payload.email) {
+        emails = [{
+          to: String(payload.utas_email || payload.email),
+          subject: `Foglalás jóváhagyva: ${String(payload.indulas || '')} → ${String(payload.erkezes || '')}`,
+          html: `<h2>Foglalás jóváhagyva</h2><p>Kedves ${passengerName}!</p><p>A sofőr jóváhagyta a foglalásodat.</p><p><strong>${route}</strong></p><p>Dátum: ${dateTime}</p><p>Sofőr: ${driverName}</p><p>Kapcsolat: ${esc(payload.sofor_email || '')}${payload.sofor_telefon ? ' · ' + esc(payload.sofor_telefon) : ''}</p>`
+        }]
+      }
+      sms = [{
+        to: String(payload.utas_telefon || payload.telefon || ''),
+        body: `FuvarVelünk: a foglalásodat jóváhagyták. Fuvar: ${String(payload.indulas || '')} → ${String(payload.erkezes || '')}, indulás: ${String(payload.datum || '')} ${String(payload.ido || '')}.`
+      }]
+      push = [{
+        externalIds: [String(payload.utas_email || payload.email || '')],
+        heading: 'Foglalás jóváhagyva',
+        message: `${String(payload.indulas || '')} → ${String(payload.erkezes || '')} · ${String(payload.datum || '')} ${String(payload.ido || '')}`,
+        url: tripUrl
+      }]
+      break
+
+    case 'fizetve_jelolve':
+      if (payload.utas_email || payload.email) {
+        emails = [{
+          to: String(payload.utas_email || payload.email),
+          subject: `Fizetés visszaigazolva: ${String(payload.indulas || '')} → ${String(payload.erkezes || '')}`,
+          html: `<h2>Fizetés visszaigazolva</h2><p>Kedves ${passengerName}!</p><p>A sofőr fizetettnek jelölte a foglalásodat.</p><p><strong>${route}</strong></p><p>Dátum: ${dateTime}</p><p>Kérjük, jelenj meg indulás előtt legalább 10 perccel.</p>`
+        }]
+      }
+      sms = [{
+        to: String(payload.utas_telefon || payload.telefon || ''),
+        body: `FuvarVelünk: a sofőr fizetettnek jelölte a foglalásodat. ${String(payload.indulas || '')} → ${String(payload.erkezes || '')}, ${String(payload.datum || '')} ${String(payload.ido || '')}.`
+      }]
+      push = [{
+        externalIds: [String(payload.utas_email || payload.email || '')],
+        heading: 'Fizetés visszaigazolva',
+        message: `${String(payload.indulas || '')} → ${String(payload.erkezes || '')} · indulás előtt 10 perccel érkezz`,
+        url: tripUrl
+      }]
+      break
+
+    case 'sofor_indulas_emlekezteto':
+      emails = [{
+        to: String(payload.sofor_email || adminEmail),
+        subject: `Fuvar indul 2 órán belül: ${String(payload.indulas || '')} → ${String(payload.erkezes || '')}`,
+        html: `<h2>Indulási emlékeztető</h2><p>Kedves ${driverName}!</p><p>A fuvarod 2 órán belül indul.</p><p><strong>${route}</strong></p><p>Dátum: ${dateTime}</p><p>Foglalások száma: ${esc(payload.foglalas_db || 0)}</p>`
+      }]
+      sms = [{
+        to: String(payload.sofor_telefon || payload.telefon || ''),
+        body: `FuvarVelünk: a ${String(payload.indulas || '')} → ${String(payload.erkezes || '')} fuvarod 2 órán belül indul. Foglalások: ${String(payload.foglalas_db || 0)}.`
+      }]
+      push = [{
+        externalIds: [String(payload.sofor_email || '')],
+        heading: 'Fuvar indul 2 órán belül',
+        message: `${String(payload.indulas || '')} → ${String(payload.erkezes || '')} · foglalások: ${String(payload.foglalas_db || 0)}`,
+        url: tripUrl
+      }]
+      break
+
+    case 'uj_fuvar':
+    default:
+      emails = [{
+        to: adminEmail,
+        subject: `Új fuvar érkezett: ${String(payload.indulas || '')} → ${String(payload.erkezes || payload.cel || '')}`,
+        html: `<h2>Új fuvar érkezett</h2><p><strong>${route}</strong></p><p>Dátum: ${dateTime}</p><p>Sofőr: ${esc(payload.nev || payload.sofor_nev || '')} (${esc(payload.email || payload.sofor_email || '')})</p><p>Telefonszám: ${esc(payload.telefon || '')}</p><p>Ár: ${esc(payload.ar || '')}</p>`
+      }]
+      push = [{
+        externalIds: [adminEmail],
+        heading: 'Új fuvar érkezett',
+        message: `${String(payload.indulas || '')} → ${String(payload.erkezes || payload.cel || '')} · ${String(payload.datum || '')} ${String(payload.ido || '')}`,
+        url: tripUrl
+      }]
+      break
+  }
+
+  return { emails, sms, push }
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: cors })
+  }
+
+  try {
+    const body = await req.json()
+    const kind = body.kind || body.tipus || ''
+    const payload = body.payload || body || {}
+    const adminEmail = String(body.adminEmail || ADMIN_EMAIL_SECRET || FALLBACK_ADMIN_EMAIL).trim()
+    const notification = buildNotification(kind, payload, adminEmail)
+    const results: any[] = []
+
+    console.log('NOTIFY_ADMIN_DEBUG:', JSON.stringify({
+      kind,
+      adminEmail,
+      resend_from: `${RESEND_FROM_NAME} <${RESEND_FROM_EMAIL}>`,
+      has_resend_key: !!RESEND_API_KEY,
+      has_onesignal: !!(ONESIGNAL_APP_ID && ONESIGNAL_API_KEY),
+      has_twilio: !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER),
+    }))
+
+    for (const item of notification.emails || []) results.push(await sendMail(item.to, item.subject, item.html))
+    for (const item of notification.sms || []) results.push(await sendSms(item.to, item.body))
+    for (const item of notification.push || []) results.push(await sendPush(item.externalIds, item.heading, item.message, item.url))
+
+    const emailFailures = results.filter((x: any) => x.channel === 'email' && !x.ok && !x.skipped)
+    const pushFailures = results.filter((x: any) => x.channel === 'push' && !x.ok && !x.skipped)
+    const mainSubject = notification.emails?.[0]?.subject || kind
+
+    await writeLog(kind, payload, mainSubject, results)
+
+    return new Response(JSON.stringify({
+      ok: emailFailures.length === 0,
+      subject: mainSubject,
+      results,
+      admin_email: adminEmail,
+      from_email: RESEND_FROM_EMAIL,
+      sms_enabled: !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER),
+      push_enabled: !!(ONESIGNAL_APP_ID && ONESIGNAL_API_KEY),
+      push_failures: pushFailures.length,
+    }), {
+      status: emailFailures.length === 0 ? 200 : 500,
+      headers: { 'Content-Type': 'application/json', ...cors }
+    })
+  } catch (error) {
+    console.error('NOTIFY_ADMIN_FATAL:', error)
+    return new Response(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...cors }
+    })
+  }
+})

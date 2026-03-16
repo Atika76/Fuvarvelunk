@@ -1,0 +1,33 @@
+Benne van az új ZIP-ben:
+
+1. Foglalás jóváhagyva -> utas push + email
+   - frontend: js/app.js
+   - edge function: supabase/functions/notify-admin/index.ts
+   kind: foglalas_jovahagyva
+
+2. Sofőr fizetettnek jelölte -> utas push + email
+   - frontend: js/app.js
+   - edge function: supabase/functions/notify-admin/index.ts
+   kind: fizetve_jelolve
+
+3. Indulás előtt 2 órával automatikus emlékeztető -> sofőr push + email (+ opcionális SMS)
+   - edge function: supabase/functions/cleanup-expired-trips/index.ts
+   kind: sofor_indulas_emlekezteto
+
+Fontos teendők Supabase-ben:
+- deploy notify-admin
+- deploy cleanup-expired-trips
+- secrets:
+  RESEND_API_KEY
+  ONESIGNAL_APP_ID
+  ONESIGNAL_API_KEY
+  SITE_URL=https://fuvarvelunk.hu
+  CRON_SECRET
+- ha SMS is kell:
+  TWILIO_ACCOUNT_SID
+  TWILIO_AUTH_TOKEN
+  TWILIO_FROM_NUMBER
+
+OneSignal web push fájlok a gyökérben:
+- OneSignalSDKWorker.js
+- OneSignalSDKUpdaterWorker.js
