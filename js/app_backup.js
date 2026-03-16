@@ -683,13 +683,17 @@ const App = (() => {
       const adminEmail = await AppAuth.fetchAdminEmail();
       const res = await fetch(APP_CONFIG.notificationFunctionUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': APP_CONFIG.supabaseKey,
+          'Authorization': `Bearer ${APP_CONFIG.supabaseKey}`
+        },
         body: JSON.stringify({ kind, payload, adminEmail })
       });
       let data = null;
       try { data = await res.json(); } catch (_) {}
       success = !!(res.ok && (!data || data.ok !== false));
-      await logEmailEvent({ tipus: kind, cel_email: kind === 'uj_foglalas' ? (payload.sofor_email || '') : (payload.utas_email || adminEmail), sikeres: success, targy: data?.subject || kind, payload: { ...payload, response: data || null } });
+      await logEmailEvent({ tipus: kind, cel_email: kind === 'uj_foglalas' ? (payload.sofor_email || adminEmail || '') : (payload.utas_email || adminEmail), sikeres: success, targy: data?.subject || kind, payload: { ...payload, response: data || null } });
       return success;
     } catch (_) {
       await logEmailEvent({ tipus: kind, cel_email: payload?.sofor_email || payload?.utas_email || '', sikeres: false, statusz: 'sikertelen', targy: kind, payload });
@@ -899,7 +903,8 @@ const App = (() => {
       auto_tipus: fd.get('carType')?.toString().trim() || '',
       ar: Number(fd.get('price') || 0),
       megjegyzes: fd.get('note')?.toString().trim() || '',
-      statusz: 'Függőben',
+      statusz: 'Jóváhagyva',
+      approved: true,
       fizetesi_modok: payment.length ? payment : ['cash'],
       bankszamla: fd.get('bankAccount')?.toString().trim() || '',
       profil_kep_url: profileUrl,
@@ -908,8 +913,9 @@ const App = (() => {
       ertekeles_db: 0
     };
     if (!payload.nev || !payload.indulas || !payload.erkezes) throw new Error('Tölts ki minden kötelező mezőt.');
-    const { error } = await sb.from(tableTrips).insert([payload]);
+    const { data, error } = await sb.from(tableTrips).insert([payload]).select('id').single();
     if (error) throw error;
+    if (data?.id) payload.id = data.id;
     const mailOk = await sendNotificationMail('uj_fuvar', payload);
     return mailOk;
   }
@@ -1312,10 +1318,10 @@ const App = (() => {
       try {
         const mailOk = await submitTrip(form);
         msg.textContent = !APP_CONFIG.notificationFunctionUrl
-          ? 'A fuvar rögzítve lett. Admin jóváhagyás után megjelenik a listában.'
+          ? 'A fuvar rögzítve lett és azonnal megjelent a listában.'
           : (mailOk
-              ? 'A fuvar rögzítve lett. Az admin e-mail értesítés is sikeresen elindult.'
-              : 'A fuvar rögzítve lett, de az e-mail értesítés nem ment ki. Ellenőrizd a Supabase Edge Function logokat és a Resend beállításokat.');
+              ? 'A fuvar rögzítve lett, megjelent a listában, és az admin e-mail értesítés is sikeresen elindult.'
+              : 'A fuvar rögzítve lett és megjelent a listában, de az e-mail értesítés nem ment ki. Ellenőrizd a Supabase Edge Function logokat és a Resend beállításokat.');
         form.reset();
         form.querySelector('[name="contactEmail"]').value = user?.email || '';
         if (driverNameInput) driverNameInput.value = user?.user_metadata?.name || user?.user_metadata?.full_name || (user?.email ? String(user.email).split('@')[0] : '');
