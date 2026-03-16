@@ -1,0 +1,10 @@
+FuvarVelunk – piacképes mobil + asztali csomag
+
+Benne van:
+- mobil nézet stabilizálás
+- navigáció javítás mobilon
+- kijelentkezés gomb láthatóbb mobilon
+- form és kártyák 1 oszlopos mobil elrendezése
+- footer / alsó térköz mobilon
+
+A Supabase / Resend / OneSignal secretek a szerveren maradnak, ez a ZIP a weboldal és a function fájlokat tartalmazza.
