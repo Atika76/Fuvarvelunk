@@ -1,3 +1,0 @@
-A OneSignal worker fajlok be vannak teve a fo mappaba:
-- OneSignalSDKWorker.js
-- OneSignalSDKUpdaterWorker.js
