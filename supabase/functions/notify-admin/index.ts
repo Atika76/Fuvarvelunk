@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || ''
 const FALLBACK_ADMIN_EMAIL = 'cegweb26@gmail.com'
+const RESEND_FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@fuvarvelunk.hu'
+const RESEND_FROM_NAME = Deno.env.get('RESEND_FROM_NAME') || 'FuvarVelünk.hu'
 const TWILIO_ACCOUNT_SID = Deno.env.get('TWILIO_ACCOUNT_SID') || ''
 const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN') || ''
 const TWILIO_FROM_NUMBER = Deno.env.get('TWILIO_FROM_NUMBER') || ''
@@ -50,7 +52,7 @@ async function sendMail(to: string, subject: string, html: string) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      from: 'FuvarVelünk <onboarding@resend.dev>',
+      from: `${RESEND_FROM_NAME} <${RESEND_FROM_EMAIL}>`,
       to: [to],
       subject,
       html,
@@ -58,7 +60,7 @@ async function sendMail(to: string, subject: string, html: string) {
   })
 
   const data = await resend.text()
-  return { ok: resend.ok, skipped: false, channel: 'email', to, subject, data }
+  return { ok: resend.ok, skipped: false, channel: 'email', to, subject, status: resend.status, data }
 }
 
 async function sendSms(to: string, body: string) {

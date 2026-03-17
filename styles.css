@@ -424,3 +424,17 @@ code{background:rgba(255,255,255,.08);padding:2px 6px;border-radius:8px}
   .auth-status{top:84px;right:10px;left:10px;max-width:none}
   .footer{margin-top:20px}
 }
+
+
+@media (max-width: 768px) {
+  .site-header { position: sticky; top: 0; z-index: 50; }
+  .site-header .nav { flex-direction: column; align-items: stretch; gap: 12px; }
+  .site-header nav { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .site-header nav a, .site-header nav button { width: 100%; text-align: center; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr !important; }
+  .container, .card, .trip-card, .info-card { max-width: 100% !important; width: 100% !important; }
+  .cards { grid-template-columns: 1fr !important; }
+  .trip-card { grid-template-columns: 1fr !important; }
+  footer, .site-footer, .bottom-bar { position: static !important; }
+  body { overflow-x: hidden; }
+}

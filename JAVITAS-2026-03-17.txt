@@ -1,0 +1,1 @@
+Javítva: admin automatikus jóváhagyás saját feltöltésnél; notify-admin function most a RESEND_FROM_EMAIL/NAME secreteket használja; felületi üzenet nem ír többé hamis email hibát, ha a hirdetés mentve lett. Deployold újra a supabase/functions/notify-admin és cleanup-expired-trips functionöket.

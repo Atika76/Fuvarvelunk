@@ -902,7 +902,8 @@ const App = (() => {
       auto_tipus: fd.get('carType')?.toString().trim() || '',
       ar: Number(fd.get('price') || 0),
       megjegyzes: fd.get('note')?.toString().trim() || '',
-      statusz: 'Függőben',
+      statusz: (await AppAuth.isAdmin(user?.email)) ? 'Jóváhagyva' : 'Függőben',
+      approved: !!(await AppAuth.isAdmin(user?.email)),
       fizetesi_modok: payment.length ? payment : ['cash'],
       bankszamla: fd.get('bankAccount')?.toString().trim() || '',
       profil_kep_url: profileUrl,
@@ -1314,11 +1315,14 @@ const App = (() => {
       msg.textContent = 'Mentés...';
       try {
         const mailOk = await submitTrip(form);
-        msg.textContent = !APP_CONFIG.notificationFunctionUrl
-          ? 'A fuvar rögzítve lett. Admin jóváhagyás után megjelenik a listában.'
-          : (mailOk
-              ? 'A fuvar rögzítve lett. Az admin e-mail értesítés is sikeresen elindult.'
-              : 'A fuvar rögzítve lett, de az e-mail értesítés nem ment ki. Ellenőrizd a Supabase Edge Function logokat és a Resend beállításokat.');
+        const isAdminTrip = await AppAuth.isAdmin(user?.email);
+        msg.textContent = isAdminTrip
+          ? 'A fuvar rögzítve lett és adminként azonnal meg is jelent.'
+          : (!APP_CONFIG.notificationFunctionUrl
+              ? 'A fuvar rögzítve lett. Admin jóváhagyás után megjelenik a listában.'
+              : (mailOk
+                  ? 'A fuvar rögzítve lett. Az admin e-mail értesítés is sikeresen elindult.'
+                  : 'A fuvar rögzítve lett. Az e-mail vagy a push visszajelzés nem volt teljes, de a hirdetés mentve lett.'));
         form.reset();
         form.querySelector('[name="contactEmail"]').value = user?.email || '';
         if (driverNameInput) driverNameInput.value = user?.user_metadata?.name || user?.user_metadata?.full_name || (user?.email ? String(user.email).split('@')[0] : '');
