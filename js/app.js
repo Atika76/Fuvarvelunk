@@ -681,9 +681,17 @@ const App = (() => {
     let success = false;
     try {
       const adminEmail = await AppAuth.fetchAdminEmail();
+      const { data: sessionData } = await sb.auth.getSession();
+      const accessToken = sessionData?.session?.access_token || '';
+      const headers = {
+        'Content-Type': 'application/json',
+        'apikey': APP_CONFIG.supabaseKey || ''
+      };
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+
       const res = await fetch(APP_CONFIG.notificationFunctionUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ kind, payload, adminEmail })
       });
       let data = null;
@@ -691,8 +699,23 @@ const App = (() => {
       const emailResult = Array.isArray(data?.results)
         ? data.results.find(x => x && x.channel === 'email')
         : null;
-      success = !!(emailResult?.ok || (res.ok && data?.ok === true));
-      await logEmailEvent({ tipus: kind, cel_email: kind === 'uj_foglalas' ? (payload.sofor_email || '') : (payload.utas_email || adminEmail), sikeres: success, targy: data?.subject || kind, payload: { ...payload, response: data || null } });
+      const pushResult = Array.isArray(data?.results)
+        ? data.results.find(x => x && x.channel === 'push')
+        : null;
+      success = !!(emailResult?.ok || pushResult?.ok || (res.ok && data?.ok === true));
+      await logEmailEvent({
+        tipus: kind,
+        cel_email: kind === 'uj_foglalas' ? (payload.sofor_email || '') : (payload.utas_email || adminEmail),
+        sikeres: success,
+        targy: data?.subject || kind,
+        payload: {
+          ...payload,
+          response: data || null,
+          http_status: res.status,
+          push_ok: !!pushResult?.ok,
+          email_ok: !!emailResult?.ok
+        }
+      });
       return success;
     } catch (_) {
       await logEmailEvent({ tipus: kind, cel_email: payload?.sofor_email || payload?.utas_email || '', sikeres: false, statusz: 'sikertelen', targy: kind, payload });

@@ -1,0 +1,32 @@
+MIT JAVÍTOTTAM EB BEN A ZIPBEN
+
+1. Azonnali e-mail / push hívás javítva:
+- a böngésző most már Authorization + apikey fejléccel hívja a Supabase Edge Functiont
+- emiatt nem akad el akkor sem, ha a function JWT ellenőrzéssel fut
+
+2. notify-admin Edge Function javítva:
+- stabilabb CORS
+- GET állapotellenőrzés támogatás
+- részletesebb eredmény-visszaadás
+- push + email + sms külön visszajelzés
+- alapértelmezett feladó cím biztonságosabb fallbackre állítva
+
+3. 2 órás emlékeztető javítva:
+- nem csak a sofőrnek, hanem az utasnak is küld emlékeztetőt
+- email_naplo táblába külön logot ír
+
+FONTOS
+
+Az e-mail attól még csak akkor fog tényleg megjönni, ha a Supabase secrets rendben be vannak állítva:
+- RESEND_API_KEY
+- RESEND_FROM_EMAIL   (ha saját domained van, pl. noreply@fuvarvelunk.hu)
+
+A push csak akkor fog megjönni, ha ezek is rendben vannak:
+- ONESIGNAL_APP_ID
+- ONESIGNAL_API_KEY
+
+ÉS a felhasználó a telefonján tényleg engedélyezte a push értesítést.
+
+HA NINCS SAJÁT VERIFIED EMAIL DOMAIN:
+átmenetileg a function fallbackből onboarding@resend.dev címmel próbál küldeni,
+de ez Resendnél általában csak teszthez jó. Teljes működéshez verified domain kell.
