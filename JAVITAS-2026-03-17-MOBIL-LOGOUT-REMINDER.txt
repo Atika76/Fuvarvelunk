@@ -1,0 +1,18 @@
+Ebben a csomagban javítva:
+
+1. Mobilon stabilabb fuvarlista betöltés
+- fallback lekérés került be, ha a szűrt Supabase lekérés hibázik
+- visszalépéskor / újramegnyitáskor újratölti a fuvarlistát
+
+2. Kilépés javítva mobilon
+- a hamburger menüben külön mobil kilépés gomb is van
+- erősebb local session törlés + logout visszajelzés
+
+3. Push / email / SMS emlékeztető bővítve
+- a cleanup-expired-trips edge function most már nemcsak a sofőrnek,
+  hanem a foglalt utasnak is küld 2 órával indulás előtt emlékeztetőt
+
+TEENDŐK:
+- a supabase/functions/cleanup-expired-trips/index.ts fájlt újra deployold
+- a reminder cron maradhat ugyanaz
+- Resend / OneSignal / Twilio secret maradjon beállítva

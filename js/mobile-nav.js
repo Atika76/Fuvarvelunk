@@ -16,6 +16,17 @@
       navWrap.insertBefore(toggle, nav);
     }
 
+    let mobileActions = nav.querySelector('.mobile-nav-actions');
+    if(!mobileActions){
+      mobileActions = document.createElement('div');
+      mobileActions.className = 'mobile-nav-actions';
+      const logoutBtn = nav.querySelector('[data-logout]');
+      const adminLink = nav.querySelector('a[href="admin.html"]');
+      if (logoutBtn) mobileActions.appendChild(logoutBtn.cloneNode(true));
+      if (adminLink && !mobileActions.querySelector('a[href="admin.html"]')) mobileActions.appendChild(adminLink.cloneNode(true));
+      nav.appendChild(mobileActions);
+    }
+
     function closeMenu(){
       header.classList.remove('nav-open');
       document.body.classList.remove('nav-open');
@@ -28,18 +39,25 @@
     }
     function isMobile(){ return window.innerWidth <= 860; }
 
-    toggle.addEventListener('click', function(){
-      if(!isMobile()) return;
-      if(header.classList.contains('nav-open')) closeMenu(); else openMenu();
-    });
+    if (!toggle.dataset.bound) {
+      toggle.dataset.bound = '1';
+      toggle.addEventListener('click', function(){
+        if(!isMobile()) return;
+        if(header.classList.contains('nav-open')) closeMenu(); else openMenu();
+      });
+    }
 
-    nav.addEventListener('click', function(e){
-      const target = e.target.closest('a,button');
-      if(target && isMobile()) closeMenu();
-    });
+    if (!nav.dataset.bound) {
+      nav.dataset.bound = '1';
+      nav.addEventListener('click', function(e){
+        const target = e.target.closest('a,button');
+        if(target && isMobile()) closeMenu();
+      });
+    }
 
     window.addEventListener('resize', function(){ if(!isMobile()) closeMenu(); });
     document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeMenu(); });
+    window.addEventListener('pageshow', function(){ closeMenu(); });
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initMobileNav);
   else initMobileNav();

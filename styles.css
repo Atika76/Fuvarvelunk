@@ -505,3 +505,17 @@ code{background:rgba(255,255,255,.08);padding:2px 6px;border-radius:8px}
   .nav-toggle{width:58px;height:58px;border-radius:20px}
   .nav-toggle span{width:24px}
 }
+
+
+/* 2026-03-17 stabil mobil javítások */
+.mobile-nav-actions{display:none;gap:12px}
+@media (max-width:860px){
+  .mobile-nav-actions{display:grid;grid-template-columns:1fr;gap:12px;margin-top:6px}
+  .mobile-nav-actions [data-auth="user"],
+  .mobile-nav-actions [data-auth="admin"]{display:flex}
+  .mobile-nav-actions .hidden{display:none !important}
+  #tripsMap{min-height:260px}
+  #tripsList.cards{grid-template-columns:1fr !important}
+  .trip-card,.trip-card.compact,.trip-compact{overflow:hidden}
+  .trip-card img{max-width:100%;height:auto}
+}

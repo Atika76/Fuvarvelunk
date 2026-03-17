@@ -418,6 +418,8 @@ window.AppAuth = (() => {
 
     quickLocalLogout();
 
+    try { sessionStorage.setItem('fv_force_logged_out', String(Date.now())); } catch(_) {}
+
     try { await sb.auth.signOut({ scope: 'local' }); } catch (err) { console.error('Kilépési hiba (local):', err); }
 
     setTimeout(() => {
@@ -425,7 +427,11 @@ window.AppAuth = (() => {
       sb.auth.signOut().catch((err) => console.error('Kilépési hiba:', err));
     }, 0);
 
-    window.location.replace(target);
+    try {
+      window.location.replace(target + (target.includes('?') ? '&' : '?') + 'logout=1');
+    } catch (_) {
+      window.location.href = target + (target.includes('?') ? '&' : '?') + 'logout=1';
+    }
   }
 
   async function requireAuth(next='index.html') {
@@ -452,10 +458,17 @@ window.AppAuth = (() => {
 
   function bindLogout() {
     document.querySelectorAll('[data-logout]').forEach(el => {
+      if (el.dataset.logoutBound === '1') return;
+      el.dataset.logoutBound = '1';
       el.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        await logout();
+        el.disabled = true;
+        try {
+          await logout();
+        } finally {
+          el.disabled = false;
+        }
         return false;
       });
     });

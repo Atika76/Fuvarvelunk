@@ -570,6 +570,37 @@ const App = (() => {
     return trips;
   }
 
+
+  function applyTripFiltersLocally(data = [], filters = {}) {
+    let trips = (data || []).filter(t => String(t.statusz || '').trim().toLowerCase() === 'jóváhagyva'.toLowerCase()).filter(t => !isTripExpired(t));
+    if (filters.origin) trips = trips.filter(t => String(t.indulas || '').toLowerCase().includes(String(filters.origin).toLowerCase()));
+    if (filters.destination) trips = trips.filter(t => String(t.erkezes || '').toLowerCase().includes(String(filters.destination).toLowerCase()));
+    if (filters.date) trips = trips.filter(t => String(t.datum || '') === String(filters.date));
+    if (filters.maxPrice) trips = trips.filter(t => Number(t.ar || 0) <= Number(filters.maxPrice));
+    if (filters.onlyFree) trips = trips.filter(t => !isTripFull(t));
+    if (filters.dayPreset === 'today') {
+      const today = new Date().toISOString().slice(0, 10);
+      trips = trips.filter(t => t.datum === today);
+    } else if (filters.dayPreset === 'tomorrow') {
+      const d = new Date(); d.setDate(d.getDate() + 1);
+      trips = trips.filter(t => t.datum === d.toISOString().slice(0, 10));
+    }
+    const sort = filters.sort || 'time_asc';
+    trips.sort((a, b) => sort === 'time_desc' ? tripSortValue(b) - tripSortValue(a) : sort === 'price_asc' ? Number(a.ar || 0) - Number(b.ar || 0) : sort === 'price_desc' ? Number(b.ar || 0) - Number(a.ar || 0) : tripSortValue(a) - tripSortValue(b));
+    return trips;
+  }
+
+  async function fetchApprovedTripsRobust(filters = {}) {
+    try {
+      return await fetchApprovedTrips(filters);
+    } catch (error) {
+      console.warn('fetchApprovedTrips hiba, fallback indul:', error);
+      const { data, error: allError } = await sb.from(tableTrips).select('*').order('datum', { ascending: true }).order('ido', { ascending: true });
+      if (allError) throw allError;
+      return applyTripFiltersLocally(data || [], filters);
+    }
+  }
+
   async function fetchAllTrips() {
     const { data, error } = await sb.from(tableTrips).select('*').order('created_at', { ascending: false });
     if (error) throw error;
@@ -681,17 +712,9 @@ const App = (() => {
     let success = false;
     try {
       const adminEmail = await AppAuth.fetchAdminEmail();
-      const { data: sessionData } = await sb.auth.getSession();
-      const accessToken = sessionData?.session?.access_token || '';
-      const headers = {
-        'Content-Type': 'application/json',
-        'apikey': APP_CONFIG.supabaseKey || ''
-      };
-      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
-
       const res = await fetch(APP_CONFIG.notificationFunctionUrl, {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind, payload, adminEmail })
       });
       let data = null;
@@ -699,23 +722,8 @@ const App = (() => {
       const emailResult = Array.isArray(data?.results)
         ? data.results.find(x => x && x.channel === 'email')
         : null;
-      const pushResult = Array.isArray(data?.results)
-        ? data.results.find(x => x && x.channel === 'push')
-        : null;
-      success = !!(emailResult?.ok || pushResult?.ok || (res.ok && data?.ok === true));
-      await logEmailEvent({
-        tipus: kind,
-        cel_email: kind === 'uj_foglalas' ? (payload.sofor_email || '') : (payload.utas_email || adminEmail),
-        sikeres: success,
-        targy: data?.subject || kind,
-        payload: {
-          ...payload,
-          response: data || null,
-          http_status: res.status,
-          push_ok: !!pushResult?.ok,
-          email_ok: !!emailResult?.ok
-        }
-      });
+      success = !!(emailResult?.ok || (res.ok && data?.ok === true));
+      await logEmailEvent({ tipus: kind, cel_email: kind === 'uj_foglalas' ? (payload.sofor_email || '') : (payload.utas_email || adminEmail), sikeres: success, targy: data?.subject || kind, payload: { ...payload, response: data || null } });
       return success;
     } catch (_) {
       await logEmailEvent({ tipus: kind, cel_email: payload?.sofor_email || payload?.utas_email || '', sikeres: false, statusz: 'sikertelen', targy: kind, payload });
@@ -1239,7 +1247,7 @@ const App = (() => {
     const featured = document.getElementById('featuredTrips');
     if (!featured) return;
     try {
-      const trips = (await enrichTripsWithRatings(await enrichTripsWithBookings(await fetchApprovedTrips({})))).slice(0, 6);
+      const trips = (await enrichTripsWithRatings(await enrichTripsWithBookings(await fetchApprovedTripsRobust({})))).slice(0, 6);
       featured.innerHTML = trips.length ? trips.map(t => `
         <article class="card">
           ${tripGalleryMarkup(t, true)}
@@ -1292,11 +1300,11 @@ const App = (() => {
       if (recWrap) recWrap.innerHTML = '';
       try {
         const filters = { origin: originInput.value.trim(), destination: destinationInput.value.trim(), date: dateInput.value, maxPrice: maxPriceInput?.value || '', dayPreset: dayPresetInput?.value || '', sort: sortInput?.value || 'time_asc', onlyFree: !!onlyFreeInput?.checked };
-        const trips = await enrichTripsWithRatings(await enrichTripsWithBookings(await fetchApprovedTrips(filters)));
+        const trips = await enrichTripsWithRatings(await enrichTripsWithBookings(await fetchApprovedTripsRobust(filters)));
         list.innerHTML = trips.length ? trips.map(t => tripListCard(t)).join('') : '<div class="empty-state">Nincs a keresésnek megfelelő fuvar.</div>';
         if (trips[0]) await focusRoute(trips[0].indulas, trips[0].erkezes);
         if (!trips.length && recWrap) {
-          const all = await enrichTripsWithRatings(await enrichTripsWithBookings(await fetchApprovedTrips({})));
+          const all = await enrichTripsWithRatings(await enrichTripsWithBookings(await fetchApprovedTripsRobust({})));
           const rec = buildRecommendations(all, filters);
           recWrap.innerHTML = rec.length ? `<h3>Ajánlott fuvarok</h3><div class="trip-list-grid">${rec.map(t => tripListCard(t)).join('')}</div>` : '';
         }
@@ -1306,6 +1314,8 @@ const App = (() => {
     }
     await render();
     document.getElementById('tripFilterForm')?.addEventListener('submit', async (e) => { e.preventDefault(); const p = new URLSearchParams(); [['origin', originInput.value.trim()], ['destination', destinationInput.value.trim()], ['date', dateInput.value], ['maxPrice', maxPriceInput?.value || ''], ['dayPreset', dayPresetInput?.value || ''], ['sort', sortInput?.value || 'time_asc']].forEach(([k,v]) => { if (v) p.set(k, v); }); if (onlyFreeInput?.checked) p.set('onlyFree','1'); history.replaceState({}, '', 'fuvarok.html' + (p.toString() ? '?' + p.toString() : '')); await render(); });
+    window.addEventListener('pageshow', () => { render().catch(() => {}); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) render().catch(() => {}); });
   }
 
   async function initTripFormPage() {
@@ -1463,7 +1473,7 @@ const App = (() => {
     const params = new URLSearchParams(location.search);
     const email = params.get('email');
     const name = params.get('name');
-    const allTrips = await enrichTripsWithRatings(await enrichTripsWithBookings(await fetchApprovedTrips({}).catch(() => [])));
+    const allTrips = await enrichTripsWithRatings(await enrichTripsWithBookings(await fetchApprovedTripsRobust({}).catch(() => [])));
     const trips = allTrips.filter(t => (email && t.email === email) || (name && t.nev === name));
     const trip = trips[0] || { nev: name || 'Ismeretlen sofőr', email: email || '', telefon: '' };
     box.innerHTML = `
