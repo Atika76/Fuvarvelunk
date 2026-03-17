@@ -395,40 +395,32 @@ code{background:rgba(255,255,255,.08);padding:2px 6px;border-radius:8px}
 }
 
 
-.nav-toggle{display:none;align-items:center;justify-content:center;flex-direction:column;gap:5px;width:52px;height:52px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);cursor:pointer}
-.nav-toggle span{display:block;width:22px;height:2px;border-radius:999px;background:currentColor}
-.upload-preview-item{position:relative}
-.upload-remove-btn{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:999px;border:none;background:rgba(240,91,122,.92);color:#fff;font-size:1.1rem;cursor:pointer;display:grid;place-items:center;line-height:1}
+/* --- Mobile navigation + layout stabilizer --- */
+.nav-toggle{display:none;align-items:center;justify-content:center;gap:5px;flex-direction:column;width:48px;height:48px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);cursor:pointer}
+.nav-toggle span{display:block;width:22px;height:2px;background:currentColor;border-radius:999px;transition:transform .2s ease,opacity .2s ease}
+.site-header.nav-open .nav-toggle span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.site-header.nav-open .nav-toggle span:nth-child(2){opacity:0}
+.site-header.nav-open .nav-toggle span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
 
 @media (max-width: 860px){
   body.nav-open{overflow:hidden}
   .site-header{position:sticky;top:0}
-  .nav{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;min-height:auto;padding:12px 0}
-  .logo-wrap{min-width:0;font-size:1.05rem}
-  .logo-wrap img{width:44px;height:44px}
-  .nav-toggle{display:inline-flex}
-  .nav nav.nav-links{display:none;grid-column:1 / -1;flex-direction:column;align-items:stretch;gap:10px;padding:14px 0 2px}
-  .nav nav.nav-links.mobile-open{display:flex}
-  .nav nav.nav-links a,
-  .nav nav.nav-links button,
-  .nav nav.nav-links .nav-user{width:100%;justify-content:flex-start;max-width:none}
-  .nav-user{padding:14px 16px;border-radius:16px}
-  .hero,.cards,.grid-2,.grid-3,.grid-4,.trip-card,.admin-item,.admin-layout,.auth-panels,.two-col,.trip-list-grid,#tripsList.cards,.footer-grid{grid-template-columns:1fr !important}
-  .trip-card{gap:16px}
-  .trip-card h3{font-size:1.5rem}
-  .trip-compact .trip-tools{grid-template-columns:1fr}
-  .section{padding:22px 0 32px}
-  .container{width:min(100% - 20px, 1180px)}
-  .card,.hero-card{padding:18px}
-  .push-enable-bar{left:10px;right:10px;bottom:10px;max-height:min(48vh,380px);overflow:auto}
-  .auth-status{top:78px;right:10px;left:10px;max-width:none}
-}
-
-@media (max-width: 640px){
-  .page-title,.hero h1{font-size:clamp(2rem,10vw,2.8rem)}
-  .lead{font-size:1rem}
-  .btn,.ai-btn{width:100%}
-  .row-actions,.trip-tools,.ai-inline-actions,.trip-actions{flex-direction:column}
-  .trip-tools .btn,.trip-tools a,.trip-actions .btn,.trip-actions a{width:100%}
-  #tripsMap,#tripMap{height:260px}
+  .nav{position:relative;align-items:center;min-height:76px;padding:12px 0}
+  .nav-toggle{display:inline-flex;order:3;margin-left:auto}
+  .nav nav{display:none;position:absolute;top:calc(100% + 10px);left:0;right:0;z-index:50;background:rgba(4,15,34,.98);border:1px solid var(--line);border-radius:20px;padding:14px;box-shadow:var(--shadow);max-height:calc(100vh - 120px);overflow:auto}
+  .site-header.nav-open .nav nav{display:grid;grid-template-columns:1fr;gap:10px}
+  .nav nav a,.nav nav button,.nav-user{width:100%;justify-content:flex-start;min-height:48px;padding:14px 16px;max-width:none}
+  .logo-wrap{font-size:1rem;min-width:0}
+  .logo-wrap span{display:inline-block;max-width:calc(100vw - 150px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hero{grid-template-columns:1fr;padding-top:24px}
+  .row-actions .btn,.section-head .btn{width:100%}
+  .section-head{flex-direction:column;align-items:stretch}
+  .trip-card,.admin-item,.grid-2,.two-col,.auth-panels,.admin-layout,.cards,.grid-3,.grid-4,.footer-grid,#tripsList.cards,.trip-list-grid{grid-template-columns:1fr !important}
+  .trip-tools,.trip-compact .trip-tools{grid-template-columns:1fr !important}
+  .trip-actions{justify-content:stretch}
+  .trip-actions .btn,.trip-actions a,.trip-tools .btn,.trip-tools a{width:100% !important}
+  .container{width:min(100% - 16px,1180px)}
+  .card,.hero-card{padding:16px}
+  .auth-status{top:84px;right:10px;left:10px;max-width:none}
+  .footer{margin-top:20px}
 }

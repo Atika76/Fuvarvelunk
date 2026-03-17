@@ -1,0 +1,10 @@
+Ez a csomag a jelenlegi asztali működő FuvarVelünk.hu verzió mobiljavított kiadása.
+
+Beépített módosítások:
+- mobil hamburger menü
+- mobilon látható és kattintható navigáció
+- FuvarVelünk.hu márkanév egységesítése
+- email siker-visszajelzés javítása a felületen
+- a meglévő asztali működés megtartása
+
+A Supabase / Resend / OneSignal beállításokat nem írja felül, azokat a jelenlegi élő projektből használja.

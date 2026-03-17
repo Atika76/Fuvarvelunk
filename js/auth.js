@@ -6,57 +6,6 @@ window.AppAuth = (() => {
   const ONESIGNAL_PROMPT_KEY = 'fv_onesignal_prompt_shown';
   let oneSignalBootPromise = null;
 
-
-function setupMobileNav() {
-  const navWrap = document.querySelector('.site-header .nav');
-  const nav = navWrap?.querySelector('nav');
-  if (!navWrap || !nav) return;
-
-  nav.classList.add('nav-links');
-
-  let toggle = navWrap.querySelector('.nav-toggle');
-  if (!toggle) {
-    toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'nav-toggle';
-    toggle.setAttribute('aria-expanded', 'false');
-    toggle.setAttribute('aria-label', 'Menü megnyitása');
-    toggle.innerHTML = '<span></span><span></span><span></span>';
-    navWrap.insertBefore(toggle, nav);
-  }
-
-  const closeMenu = () => {
-    nav.classList.remove('mobile-open');
-    navWrap.classList.remove('mobile-open');
-    toggle?.setAttribute('aria-expanded', 'false');
-    document.body.classList.remove('nav-open');
-  };
-
-  const openMenu = () => {
-    nav.classList.add('mobile-open');
-    navWrap.classList.add('mobile-open');
-    toggle?.setAttribute('aria-expanded', 'true');
-    document.body.classList.add('nav-open');
-  };
-
-  if (!toggle.dataset.bound) {
-    toggle.dataset.bound = '1';
-    toggle.addEventListener('click', () => {
-      if (nav.classList.contains('mobile-open')) closeMenu();
-      else openMenu();
-    });
-    nav.addEventListener('click', (e) => {
-      const target = e.target;
-      if (target instanceof HTMLElement && (target.closest('a') || target.closest('button'))) {
-        setTimeout(closeMenu, 0);
-      }
-    });
-    window.addEventListener('resize', () => {
-      if (window.innerWidth > 860) closeMenu();
-    });
-  }
-}
-
   function setNext(url) {
     try { sessionStorage.setItem('uv_next', url || 'index.html'); } catch(_) {}
   }
@@ -575,7 +524,6 @@ function setupMobileNav() {
 })();
 
 document.addEventListener('DOMContentLoaded', async () => {
-  setupMobileNav();
   try { await AppAuth.updateNav(); } catch(_) {}
   AppAuth.bindLogout();
   AppAuth.bindFacebookLogin();

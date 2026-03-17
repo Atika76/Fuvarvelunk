@@ -689,9 +689,9 @@ const App = (() => {
       let data = null;
       try { data = await res.json(); } catch (_) {}
       const emailResult = Array.isArray(data?.results)
-  ? data.results.find(x => x?.channel === 'email')
-  : null;
-success = !!(emailResult?.ok || (res.ok && data?.ok === true));
+        ? data.results.find(x => x && x.channel === 'email')
+        : null;
+      success = !!(emailResult?.ok || (res.ok && data?.ok === true));
       await logEmailEvent({ tipus: kind, cel_email: kind === 'uj_foglalas' ? (payload.sofor_email || '') : (payload.utas_email || adminEmail), sikeres: success, targy: data?.subject || kind, payload: { ...payload, response: data || null } });
       return success;
     } catch (_) {
@@ -914,7 +914,7 @@ success = !!(emailResult?.ok || (res.ok && data?.ok === true));
     const { error } = await sb.from(tableTrips).insert([payload]);
     if (error) throw error;
     const mailOk = await sendNotificationMail('uj_fuvar', payload);
-    return { emailOk: !!mailOk };
+    return mailOk;
   }
 
   async function submitBooking(trip, form) {
@@ -1313,12 +1313,11 @@ success = !!(emailResult?.ok || (res.ok && data?.ok === true));
       const msg = document.getElementById('tripFormMsg');
       msg.textContent = 'Mentés...';
       try {
-        const submitResult = await submitTrip(form);
-        const mailOk = !!submitResult?.emailOk;
+        const mailOk = await submitTrip(form);
         msg.textContent = !APP_CONFIG.notificationFunctionUrl
           ? 'A fuvar rögzítve lett. Admin jóváhagyás után megjelenik a listában.'
           : (mailOk
-              ? 'A fuvar rögzítve lett. Az admin e-mail értesítés elküldve.'
+              ? 'A fuvar rögzítve lett. Az admin e-mail értesítés is sikeresen elindult.'
               : 'A fuvar rögzítve lett, de az e-mail értesítés nem ment ki. Ellenőrizd a Supabase Edge Function logokat és a Resend beállításokat.');
         form.reset();
         form.querySelector('[name="contactEmail"]').value = user?.email || '';
