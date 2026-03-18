@@ -5,7 +5,6 @@ window.AppAuth = (() => {
   const ONESIGNAL_APP_ID = '04a02749-13bd-4060-9559-f0808ee9f927';
   const ONESIGNAL_PROMPT_KEY = 'fv_onesignal_prompt_shown';
   let oneSignalBootPromise = null;
-  let oneSignalListenersBound = false;
 
   function setNext(url) {
     try { sessionStorage.setItem('uv_next', url || 'index.html'); } catch(_) {}
@@ -85,24 +84,6 @@ window.AppAuth = (() => {
     }, 2200);
   }
 
-  function bindOneSignalDebugListeners(OneSignal) {
-    if (oneSignalListenersBound || !OneSignal?.User?.PushSubscription?.addEventListener) return;
-    oneSignalListenersBound = true;
-    try {
-      OneSignal.User.PushSubscription.addEventListener('change', (event) => {
-        try {
-          const snapshot = {
-            at: new Date().toISOString(),
-            previous: event?.previous || null,
-            current: event?.current || null,
-            permission: (typeof Notification !== 'undefined' ? Notification.permission : 'unsupported')
-          };
-          localStorage.setItem('fv_push_debug', JSON.stringify(snapshot));
-        } catch (_) {}
-      });
-    } catch (_) {}
-  }
-
   function ensureOneSignalSdk() {
     if (!ONESIGNAL_APP_ID) return Promise.resolve(null);
     if (oneSignalBootPromise) return oneSignalBootPromise;
@@ -110,42 +91,35 @@ window.AppAuth = (() => {
     oneSignalBootPromise = new Promise((resolve) => {
       window.OneSignalDeferred = window.OneSignalDeferred || [];
 
-      const boot = async (OneSignal) => {
-        try {
-          if (!OneSignal) {
+      const afterLoad = () => {
+        window.OneSignalDeferred.push(async function(OneSignal) {
+          try {
+            await OneSignal.init({
+              appId: ONESIGNAL_APP_ID,
+              serviceWorkerPath: 'OneSignalSDKWorker.js',
+              serviceWorkerUpdaterPath: 'OneSignalSDKUpdaterWorker.js',
+              notifyButton: { enable: false },
+              allowLocalhostAsSecureOrigin: true,
+            });
+            resolve(OneSignal);
+          } catch (err) {
+            console.warn('OneSignal init hiba:', err);
             resolve(null);
-            return;
           }
-          await OneSignal.init({
-            appId: ONESIGNAL_APP_ID,
-            serviceWorkerPath: 'OneSignalSDKWorker.js',
-            serviceWorkerUpdaterPath: 'OneSignalSDKUpdaterWorker.js',
-            notifyButton: { enable: false },
-            allowLocalhostAsSecureOrigin: true,
-          });
-          try { if (OneSignal.Notifications?.setDefaultUrl) OneSignal.Notifications.setDefaultUrl(APP_CONFIG.siteUrl || window.location.origin + '/'); } catch (_) {}
-          bindOneSignalDebugListeners(OneSignal);
-          resolve(OneSignal);
-        } catch (err) {
-          console.warn('OneSignal init hiba:', err);
-          resolve(null);
-        }
+        });
       };
 
-      if (window.OneSignal && typeof window.OneSignal.init === 'function') {
-        boot(window.OneSignal);
+      const existing = document.querySelector('script[data-onesignal-sdk="1"]');
+      if (existing) {
+        afterLoad();
         return;
       }
-
-      window.OneSignalDeferred.push(boot);
-
-      const existing = document.querySelector('script[data-onesignal-sdk="1"]');
-      if (existing) return;
 
       const script = document.createElement('script');
       script.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
       script.defer = true;
       script.dataset.onesignalSdk = '1';
+      script.onload = afterLoad;
       script.onerror = () => {
         console.warn('OneSignal SDK nem töltődött be.');
         resolve(null);
@@ -292,14 +266,8 @@ window.AppAuth = (() => {
             if (latest.mode === 'granted') {
               try {
                 await OneSignal.login(email);
-                if (OneSignal.User?.addEmail) {
-                  await OneSignal.User.addEmail(email);
-                }
                 if (OneSignal.User?.addTag) {
                   await OneSignal.User.addTag('email', email);
-                }
-                if (OneSignal.User?.PushSubscription?.optIn) {
-                  await OneSignal.User.PushSubscription.optIn();
                 }
               } catch (_) {}
               try { sessionStorage.removeItem(ONESIGNAL_PROMPT_KEY); } catch (_) {}
@@ -341,9 +309,6 @@ window.AppAuth = (() => {
 
       try {
         await OneSignal.login(email);
-        if (OneSignal.User?.addEmail) {
-          await OneSignal.User.addEmail(email);
-        }
       } catch (loginErr) {
         console.warn('OneSignal login hiba:', loginErr);
       }
@@ -356,26 +321,6 @@ window.AppAuth = (() => {
       } catch (tagErr) {
         console.warn('OneSignal tag mentési hiba:', tagErr);
       }
-
-      try {
-        if (detectPushState().mode === 'granted' && OneSignal.User?.PushSubscription?.optIn) {
-          await OneSignal.User.PushSubscription.optIn();
-        }
-      } catch (pushErr) {
-        console.warn('OneSignal optIn hiba:', pushErr);
-      }
-
-      try {
-        localStorage.setItem('fv_push_status', JSON.stringify({
-          at: new Date().toISOString(),
-          email,
-          permission: (typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'),
-          subscriptionId: OneSignal?.User?.PushSubscription?.id || null,
-          optedIn: OneSignal?.User?.PushSubscription?.optedIn ?? null,
-          onesignalId: OneSignal?.User?.onesignalId || null,
-          externalId: OneSignal?.User?.externalId || null
-        }));
-      } catch (_) {}
 
       await ensurePushPromptButton(OneSignal, email);
     } catch (err) {
