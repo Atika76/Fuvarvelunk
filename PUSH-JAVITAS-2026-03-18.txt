@@ -1,0 +1,7 @@
+Push javítások:
+- OneSignal SDK statikusan is betöltődik az oldalakon
+- auth.js erősebb OneSignal initet használ
+- login után email + external_id + optIn szinkron történik
+- debug állapot mentés: localStorage fv_push_status és fv_push_debug
+
+Fontos: ha a notify-admin edge functionben nincs push küldés, azt külön Supabase-ben kell deployolni.
