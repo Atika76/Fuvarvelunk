@@ -477,54 +477,9 @@ const App = (() => {
     host.querySelector('#aiDriverCopyBtn')?.addEventListener('click', () => copyTextValue(messageField.value, msgHost));
   }
 
-  async function geocodePlace(place) {
-    if (!place) return null;
-    const key = 'geo:' + place.toLowerCase();
-    try {
-      const cached = sessionStorage.getItem(key);
-      if (cached) return JSON.parse(cached);
-    } catch (_) {}
-    const normalized = normalizePlaceName(place);
-    const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=' + encodeURIComponent(normalized + ', Hungary');
-    const res = await fetch(url, { headers: { 'Accept-Language': 'hu' } });
-    const data = await res.json();
-    const first = data && data[0] ? { lat: Number(data[0].lat), lon: Number(data[0].lon) } : null;
-    if (first) {
-      try { sessionStorage.setItem(key, JSON.stringify(first)); } catch (_) {}
-    }
-    return first;
-  }
-
-  async function focusRoute(origin, destination) {
-    if (!document.getElementById('tripsMap')) return;
-    if (!activeMap) {
-      activeMap = L.map('tripsMap').setView([47.4979, 19.0402], 7);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(activeMap);
-    }
-    setTimeout(() => { try { activeMap.invalidateSize(); } catch(_) {} }, 60);
-    activeMarkers.forEach(m => activeMap.removeLayer(m));
-    activeMarkers = [];
-    if (activeLine) activeMap.removeLayer(activeLine);
-    const a = await geocodePlace(origin);
-    const b = await geocodePlace(destination);
-    if (!a && !b) return;
-    const points = [];
-    if (a) {
-      const m = L.marker([a.lat, a.lon]).addTo(activeMap).bindPopup('Indulás: ' + origin);
-      activeMarkers.push(m);
-      points.push([a.lat, a.lon]);
-    }
-    if (b) {
-      const m = L.marker([b.lat, b.lon]).addTo(activeMap).bindPopup('Érkezés: ' + destination);
-      activeMarkers.push(m);
-      points.push([b.lat, b.lon]);
-    }
-    if (points.length === 2) {
-      activeLine = L.polyline(points, { color: '#63a4ff', weight: 4 }).addTo(activeMap);
-      activeMap.fitBounds(activeLine.getBounds(), { padding: [32, 32] });
-    } else if (points.length === 1) {
-      activeMap.setView(points[0], 9);
-    }
+  function openGoogleRoute(origin, destination) {
+    const url = buildGoogleMapsDirectionsUrl(origin, destination);
+    try { window.open(url, '_blank', 'noopener'); } catch (_) { location.href = url; }
   }
 
   async function fetchSettings() {
@@ -755,9 +710,8 @@ const App = (() => {
         <div>
           <div class="card info-card">
             <div class="small-help">Útvonal és megosztás</div>
-            <p style="margin:8px 0 0;color:var(--muted)">Térkép, Google útvonal és Facebook-megosztás.</p>
+            <p style="margin:8px 0 0;color:var(--muted)">Google útvonal és Facebook-megosztás.</p>
             <div class="inline-pills" style="margin-top:12px">
-              <button class="btn btn-ghost js-map-focus" data-origin="${escapeHtml(trip.indulas)}" data-destination="${escapeHtml(trip.erkezes)}">Térkép</button>
               <a class="btn btn-ghost" target="_blank" rel="noopener" href="${buildGoogleMapsDirectionsUrl(trip.indulas, trip.erkezes)}">Google útvonal</a>
               <button class="btn btn-ghost js-share-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}'>Megosztás</button>
               <a class="btn btn-ghost" href="trip.html?id=${trip.id}">Részletek</a>
@@ -803,7 +757,6 @@ const App = (() => {
         ${(isAdmin || manager) && tripHasBookings(trip) ? `<div class="inline-pills" style="margin:10px 0 0"><span class="status info">Van foglalás ezen a fuvaron</span></div>` : ''}
         <div class="trip-tools">
           <a class="btn btn-ghost" href="trip.html?id=${trip.id}${(isAdmin || manager) ? '#driverBookingsSection' : ''}">Részletek${(isAdmin || manager) && tripHasBookings(trip) ? ' / foglalások' : ''}</a>
-          <button class="btn btn-ghost js-map-focus" data-origin="${escapeHtml(trip.indulas)}" data-destination="${escapeHtml(trip.erkezes)}">Térkép</button>
           <a class="btn btn-ghost" target="_blank" rel="noopener" href="${buildGoogleMapsDirectionsUrl(trip.indulas, trip.erkezes)}">Google útvonal</a>
           <button class="btn btn-ghost js-share-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}'>Megosztás</button>
           ${isAdmin ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Admin szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Admin törlés</button>` : ownTrip ? (manager ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Törlés</button>` : `<div class="notice">Ez a saját fuvarod.</div>`) : `<button class="btn btn-primary js-book-trip" data-own-booking="${trip.viewer_has_booking ? '1' : '0'}" data-trip='${encodeURIComponent(JSON.stringify(trip))}' ${full ? 'disabled' : ''}>${bookingButtonLabel(trip)}</button><a class="btn btn-secondary" href="kapcsolat.html?tripId=${trip.id}&driverName=${encodeURIComponent(trip.nev || '')}&driverEmail=${encodeURIComponent(trip.email || '')}">Kérdés a sofőrnek</a>`}
@@ -988,12 +941,6 @@ const App = (() => {
 
   async function bindGlobalActions() {
     document.body.addEventListener('click', async (e) => {
-      const mapBtn = e.target.closest('.js-map-focus');
-      if (mapBtn) {
-        await focusRoute(mapBtn.dataset.origin, mapBtn.dataset.destination);
-        document.getElementById('tripsMap')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
       const shareBtn = e.target.closest('.js-share-trip');
       if (shareBtn) {
         await shareTrip(JSON.parse(decodeURIComponent(shareBtn.dataset.trip)));
@@ -1239,10 +1186,6 @@ const App = (() => {
 
   async function initTripsPage() {
     if (!document.getElementById('tripsList')) return;
-    if (document.getElementById('tripsMap')) {
-      activeMap = L.map('tripsMap').setView([47.4979, 19.0402], 7);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(activeMap);
-    }
     const params = new URLSearchParams(location.search);
     const originInput = document.getElementById('filterOrigin');
     const destinationInput = document.getElementById('filterDestination');
@@ -1267,7 +1210,6 @@ const App = (() => {
         const filters = { origin: originInput.value.trim(), destination: destinationInput.value.trim(), date: dateInput.value, maxPrice: maxPriceInput?.value || '', dayPreset: dayPresetInput?.value || '', sort: sortInput?.value || 'time_asc', onlyFree: !!onlyFreeInput?.checked };
         const trips = await enrichTripsWithRatings(await enrichTripsWithBookings(await fetchApprovedTrips(filters)));
         list.innerHTML = trips.length ? trips.map(t => tripListCard(t)).join('') : '<div class="empty-state">Nincs a keresésnek megfelelő fuvar.</div>';
-        if (trips[0]) await focusRoute(trips[0].indulas, trips[0].erkezes);
         if (!trips.length && recWrap) {
           const all = await enrichTripsWithRatings(await enrichTripsWithBookings(await fetchApprovedTrips({})));
           const rec = buildRecommendations(all, filters);
