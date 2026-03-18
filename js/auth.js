@@ -295,35 +295,93 @@ window.AppAuth = (() => {
 
   async function syncOneSignalUser(user) {
     if (!ONESIGNAL_APP_ID) return;
+    const debug = {
+      step: 'start',
+      email: String(user?.email || '').trim().toLowerCase(),
+      permission: null,
+      optedIn: null,
+      externalId: null,
+      onesignalId: null,
+      pushToken: null,
+      error: null,
+      at: new Date().toISOString(),
+    };
     try {
       const OneSignal = await ensureOneSignalSdk();
-      if (!OneSignal) return;
-
-      const email = String(user?.email || '').trim().toLowerCase();
-      if (!email) {
-        try { await OneSignal.logout(); } catch (_) {}
-        const old = document.getElementById('pushEnableBar');
-        if (old) old.remove();
+      if (!OneSignal) {
+        debug.step = 'sdk-missing';
+        try {
+          localStorage.setItem('fv_push_status', 'sdk_missing');
+          localStorage.setItem('fv_push_debug', JSON.stringify(debug));
+        } catch (_) {}
         return;
       }
 
+      const email = String(user?.email || '').trim().toLowerCase();
+      debug.email = email;
+      if (!email) {
+        debug.step = 'logout';
+        try { await OneSignal.logout(); } catch (_) {}
+        const old = document.getElementById('pushEnableBar');
+        if (old) old.remove();
+        try {
+          localStorage.removeItem('fv_push_email');
+          localStorage.setItem('fv_push_status', 'logged_out');
+          localStorage.setItem('fv_push_debug', JSON.stringify(debug));
+        } catch (_) {}
+        return;
+      }
+
+      debug.step = 'login';
       try {
         await OneSignal.login(email);
       } catch (loginErr) {
         console.warn('OneSignal login hiba:', loginErr);
       }
 
+      debug.step = 'tagging';
       try {
         if (OneSignal.User?.addTag) {
           await OneSignal.User.addTag('email', email);
           await OneSignal.User.addTag('role', (await isAdmin(email)) ? 'admin' : 'user');
         }
+        if (OneSignal.User?.addEmail) {
+          try { await OneSignal.User.addEmail(email); } catch (_) {}
+        }
+        if (OneSignal.User?.addTags) {
+          try { await OneSignal.User.addTags({ role_email: email, site: 'fuvarvelunk' }); } catch (_) {}
+        }
       } catch (tagErr) {
         console.warn('OneSignal tag mentési hiba:', tagErr);
       }
 
+      debug.step = 'permission-check';
+      const permission = OneSignal.Notifications?.permission;
+      debug.permission = permission;
+      if (permission === true) {
+        debug.step = 'opt-in';
+        try { await OneSignal.User?.PushSubscription?.optIn?.(); } catch (_) {}
+      }
+
       await ensurePushPromptButton(OneSignal, email);
+
+      debug.step = 'collect-state';
+      debug.optedIn = !!OneSignal.User?.PushSubscription?.optedIn;
+      debug.externalId = OneSignal.User?.externalId || email;
+      debug.onesignalId = OneSignal.User?.onesignalId || null;
+      debug.pushToken = OneSignal.User?.PushSubscription?.token || null;
+      try {
+        localStorage.setItem('fv_push_status', debug.optedIn ? 'subscribed' : 'not_subscribed');
+        localStorage.setItem('fv_push_email', email);
+        localStorage.setItem('fv_push_debug', JSON.stringify(debug));
+      } catch (_) {}
     } catch (err) {
+      debug.step = 'error';
+      debug.error = String(err);
+      try {
+        localStorage.setItem('fv_push_status', 'error');
+        localStorage.setItem('fv_push_debug', JSON.stringify(debug));
+      } catch (_) {}
       console.warn('OneSignal felhasználó-szinkron hiba:', err);
     }
   }
