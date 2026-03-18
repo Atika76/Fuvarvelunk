@@ -812,9 +812,8 @@ const App = (() => {
         <div>
           <div class="card info-card">
             <div class="small-help">Útvonal és megosztás</div>
-            <p style="margin:8px 0 0;color:var(--muted)">Térkép, Google útvonal és Facebook-megosztás.</p>
+            <p style="margin:8px 0 0;color:var(--muted)">Google útvonal és Facebook-megosztás.</p>
             <div class="inline-pills" style="margin-top:12px">
-              <button class="btn btn-ghost js-map-focus" data-origin="${escapeHtml(trip.indulas)}" data-destination="${escapeHtml(trip.erkezes)}">Térkép</button>
               <a class="btn btn-ghost" target="_blank" rel="noopener" href="${buildGoogleMapsDirectionsUrl(trip.indulas, trip.erkezes)}">Google útvonal</a>
               <button class="btn btn-ghost js-share-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}'>Megosztás</button>
               <a class="btn btn-ghost" href="trip.html?id=${trip.id}">Részletek</a>
@@ -860,7 +859,6 @@ const App = (() => {
         ${(isAdmin || manager) && tripHasBookings(trip) ? `<div class="inline-pills" style="margin:10px 0 0"><span class="status info">Van foglalás ezen a fuvaron</span></div>` : ''}
         <div class="trip-tools">
           <a class="btn btn-ghost" href="trip.html?id=${trip.id}${(isAdmin || manager) ? '#driverBookingsSection' : ''}">Részletek${(isAdmin || manager) && tripHasBookings(trip) ? ' / foglalások' : ''}</a>
-          <button class="btn btn-ghost js-map-focus" data-origin="${escapeHtml(trip.indulas)}" data-destination="${escapeHtml(trip.erkezes)}">Térkép</button>
           <a class="btn btn-ghost" target="_blank" rel="noopener" href="${buildGoogleMapsDirectionsUrl(trip.indulas, trip.erkezes)}">Google útvonal</a>
           <button class="btn btn-ghost js-share-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}'>Megosztás</button>
           ${isAdmin ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Admin szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Admin törlés</button>` : ownTrip ? (manager ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Törlés</button>` : `<div class="notice">Ez a saját fuvarod.</div>`) : `<button class="btn btn-primary js-book-trip" data-own-booking="${trip.viewer_has_booking ? '1' : '0'}" data-trip='${encodeURIComponent(JSON.stringify(trip))}' ${full ? 'disabled' : ''}>${bookingButtonLabel(trip)}</button><a class="btn btn-secondary" href="kapcsolat.html?tripId=${trip.id}&driverName=${encodeURIComponent(trip.nev || '')}&driverEmail=${encodeURIComponent(trip.email || '')}">Kérdés a sofőrnek</a>`}
@@ -1046,12 +1044,6 @@ const App = (() => {
 
   async function bindGlobalActions() {
     document.body.addEventListener('click', async (e) => {
-      const mapBtn = e.target.closest('.js-map-focus');
-      if (mapBtn) {
-        await focusRoute(mapBtn.dataset.origin, mapBtn.dataset.destination);
-        document.getElementById('tripsMap')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
       const shareBtn = e.target.closest('.js-share-trip');
       if (shareBtn) {
         await shareTrip(JSON.parse(decodeURIComponent(shareBtn.dataset.trip)));
@@ -1303,10 +1295,6 @@ const App = (() => {
 
   async function initTripsPage() {
     if (!document.getElementById('tripsList')) return;
-    if (document.getElementById('tripsMap')) {
-      activeMap = L.map('tripsMap').setView([47.4979, 19.0402], 7);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(activeMap);
-    }
     const params = new URLSearchParams(location.search);
     const originInput = document.getElementById('filterOrigin');
     const destinationInput = document.getElementById('filterDestination');
@@ -1331,7 +1319,6 @@ const App = (() => {
         const filters = { origin: originInput.value.trim(), destination: destinationInput.value.trim(), date: dateInput.value, maxPrice: maxPriceInput?.value || '', dayPreset: dayPresetInput?.value || '', sort: sortInput?.value || 'time_asc', onlyFree: !!onlyFreeInput?.checked };
         const trips = await enrichTripsWithRatings(await enrichTripsWithBookings(await fetchApprovedTripsRobust(filters)));
         list.innerHTML = trips.length ? trips.map(t => tripListCard(t)).join('') : '<div class="empty-state">Nincs a keresésnek megfelelő fuvar.</div>';
-        if (trips[0]) await focusRoute(trips[0].indulas, trips[0].erkezes);
         if (!trips.length && recWrap) {
           const all = await enrichTripsWithRatings(await enrichTripsWithBookings(await fetchApprovedTripsRobust({})));
           const rec = buildRecommendations(all, filters);
@@ -1723,7 +1710,6 @@ const App = (() => {
         </section>
       </section>`;
 
-    try { await focusRoute(trip.indulas, trip.erkezes); } catch (err) { console.warn('Map focus failed', err); }
     const session = await AppAuth.getSession();
     const currentEmail = (session?.user?.email || '').trim().toLowerCase();
     const tripEmail = (trip?.email || '').trim().toLowerCase();
