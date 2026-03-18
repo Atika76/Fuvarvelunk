@@ -1710,7 +1710,6 @@ const App = (() => {
         </section>
       </section>`;
 
-    try { await focusRoute(trip.indulas, trip.erkezes); } catch (err) { console.warn('Map focus failed', err); }
     const session = await AppAuth.getSession();
     const currentEmail = (session?.user?.email || '').trim().toLowerCase();
     const tripEmail = (trip?.email || '').trim().toLowerCase();
