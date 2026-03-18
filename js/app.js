@@ -477,9 +477,54 @@ const App = (() => {
     host.querySelector('#aiDriverCopyBtn')?.addEventListener('click', () => copyTextValue(messageField.value, msgHost));
   }
 
-  function openGoogleRoute(origin, destination) {
-    const url = buildGoogleMapsDirectionsUrl(origin, destination);
-    try { window.open(url, '_blank', 'noopener'); } catch (_) { location.href = url; }
+  async function geocodePlace(place) {
+    if (!place) return null;
+    const key = 'geo:' + place.toLowerCase();
+    try {
+      const cached = sessionStorage.getItem(key);
+      if (cached) return JSON.parse(cached);
+    } catch (_) {}
+    const normalized = normalizePlaceName(place);
+    const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=' + encodeURIComponent(normalized + ', Hungary');
+    const res = await fetch(url, { headers: { 'Accept-Language': 'hu' } });
+    const data = await res.json();
+    const first = data && data[0] ? { lat: Number(data[0].lat), lon: Number(data[0].lon) } : null;
+    if (first) {
+      try { sessionStorage.setItem(key, JSON.stringify(first)); } catch (_) {}
+    }
+    return first;
+  }
+
+  async function focusRoute(origin, destination) {
+    if (!document.getElementById('tripsMap')) return;
+    if (!activeMap) {
+      activeMap = L.map('tripsMap').setView([47.4979, 19.0402], 7);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(activeMap);
+    }
+    setTimeout(() => { try { activeMap.invalidateSize(); } catch(_) {} }, 60);
+    activeMarkers.forEach(m => activeMap.removeLayer(m));
+    activeMarkers = [];
+    if (activeLine) activeMap.removeLayer(activeLine);
+    const a = await geocodePlace(origin);
+    const b = await geocodePlace(destination);
+    if (!a && !b) return;
+    const points = [];
+    if (a) {
+      const m = L.marker([a.lat, a.lon]).addTo(activeMap).bindPopup('Indulás: ' + origin);
+      activeMarkers.push(m);
+      points.push([a.lat, a.lon]);
+    }
+    if (b) {
+      const m = L.marker([b.lat, b.lon]).addTo(activeMap).bindPopup('Érkezés: ' + destination);
+      activeMarkers.push(m);
+      points.push([b.lat, b.lon]);
+    }
+    if (points.length === 2) {
+      activeLine = L.polyline(points, { color: '#63a4ff', weight: 4 }).addTo(activeMap);
+      activeMap.fitBounds(activeLine.getBounds(), { padding: [32, 32] });
+    } else if (points.length === 1) {
+      activeMap.setView(points[0], 9);
+    }
   }
 
   async function fetchSettings() {
