@@ -20,6 +20,10 @@
     if(!mobileActions){
       mobileActions = document.createElement('div');
       mobileActions.className = 'mobile-nav-actions';
+      const logoutBtn = nav.querySelector('[data-logout]');
+      const adminLink = nav.querySelector('a[href="admin.html"]');
+      if (logoutBtn) mobileActions.appendChild(logoutBtn.cloneNode(true));
+      if (adminLink && !mobileActions.querySelector('a[href="admin.html"]')) mobileActions.appendChild(adminLink.cloneNode(true));
       nav.appendChild(mobileActions);
     }
 
