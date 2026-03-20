@@ -217,102 +217,24 @@ const App = (() => {
     c.width = 1200; c.height = 630;
     const ctx = c.getContext('2d');
     const g = ctx.createLinearGradient(0, 0, 1200, 630);
-    g.addColorStop(0, '#07142c');
-    g.addColorStop(1, '#123a8f');
+    g.addColorStop(0, '#0d1d39');
+    g.addColorStop(1, '#10254a');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 1200, 630);
-
     ctx.fillStyle = 'rgba(255,255,255,.08)';
     ctx.fillRect(48, 48, 1104, 534);
-
-    const logo = new Image();
-    logo.src = 'assets/share-logo.png';
-
-    const route = `${trip.indulas} → ${trip.erkezes}`;
-    const dateLine = `${trip.datum} • ${trip.ido}`;
-    const priceLine = `${fmtCurrency(trip.ar)} Ft / fő`;
-    const seatsLine = `${seatCounts(trip).free} szabad hely`;
-    const siteLine = APP_CONFIG.brandName + ' • ' + APP_CONFIG.siteUrl;
-
-    const drawText = () => {
-      ctx.fillStyle = '#eef4ff';
-      ctx.font = 'bold 62px Arial';
-      wrapCanvasText(ctx, route, 72, 210, 1056, 70);
-
-      ctx.font = '34px Arial';
-      ctx.fillStyle = '#dbe8ff';
-      ctx.fillText(dateLine, 72, 345);
-      ctx.fillText(priceLine, 72, 400);
-      ctx.fillText(seatsLine, 72, 455);
-
-      ctx.fillStyle = '#1d4ed8';
-      roundRect(ctx, 72, 500, 350, 72, 18, true, false);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 34px Arial';
-      ctx.fillText('Megnyitás: fuvarvelunk.hu', 98, 546);
-
-      ctx.font = '30px Arial';
-      ctx.fillStyle = '#b8c9ea';
-      ctx.fillText(siteLine, 72, 598);
-    };
-
-    logo.onload = () => {
-      ctx.drawImage(logo, 72, 72, 220, 220);
-      drawText();
-    };
-    logo.onerror = () => {
-      drawText();
-    };
-
-    if (logo.complete) {
-      try {
-        if (logo.naturalWidth > 0) {
-          ctx.drawImage(logo, 72, 72, 220, 220);
-        }
-      } catch (_) {}
-      drawText();
-    }
-
+    ctx.fillStyle = '#eef4ff';
+    ctx.font = 'bold 62px Arial';
+    ctx.fillText(`${trip.indulas} → ${trip.erkezes}`, 72, 160);
+    ctx.font = '34px Arial';
+    ctx.fillStyle = '#dbe8ff';
+    ctx.fillText(`${trip.datum} • ${trip.ido}`, 72, 235);
+    ctx.fillText(`${fmtCurrency(trip.ar)} Ft / fő`, 72, 290);
+    ctx.fillText(`${seatCounts(trip).free} szabad hely`, 72, 345);
+    ctx.font = '30px Arial';
+    ctx.fillStyle = '#b8c9ea';
+    ctx.fillText(APP_CONFIG.brandName + ' • ' + APP_CONFIG.siteUrl, 72, 560);
     return c.toDataURL('image/png');
-  }
-
-  function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
-    const words = String(text || '').split(' ');
-    let line = '';
-    for (let n = 0; n < words.length; n++) {
-      const testLine = line + words[n] + ' ';
-      const metrics = ctx.measureText(testLine);
-      const testWidth = metrics.width;
-      if (testWidth > maxWidth && n > 0) {
-        ctx.fillText(line, x, y);
-        line = words[n] + ' ';
-        y += lineHeight;
-      } else {
-        line = testLine;
-      }
-    }
-    ctx.fillText(line, x, y);
-  }
-
-  function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
-    if (typeof radius === 'number') {
-      radius = { tl: radius, tr: radius, br: radius, bl: radius };
-    } else {
-      radius = Object.assign({ tl: 0, tr: 0, br: 0, bl: 0 }, radius);
-    }
-    ctx.beginPath();
-    ctx.moveTo(x + radius.tl, y);
-    ctx.lineTo(x + width - radius.tr, y);
-    ctx.quadraticCurveTo(x + width, y, x + width, y + radius.tr);
-    ctx.lineTo(x + width, y + height - radius.br);
-    ctx.quadraticCurveTo(x + width, y + height, x + width - radius.br, y + height);
-    ctx.lineTo(x + radius.bl, y + height);
-    ctx.quadraticCurveTo(x, y + height, x, y + height - radius.bl);
-    ctx.lineTo(x, y + radius.tl);
-    ctx.quadraticCurveTo(x, y, x + radius.tl, y);
-    ctx.closePath();
-    if (fill) ctx.fill();
-    if (stroke) ctx.stroke();
   }
 
   async function shareTrip(trip) {
