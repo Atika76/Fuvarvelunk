@@ -216,117 +216,40 @@ const App = (() => {
     const c = document.createElement('canvas');
     c.width = 1200; c.height = 630;
     const ctx = c.getContext('2d');
-
     const g = ctx.createLinearGradient(0, 0, 1200, 630);
-    g.addColorStop(0, '#0b1730');
-    g.addColorStop(1, '#1d4ed8');
+    g.addColorStop(0, '#0d1d39');
+    g.addColorStop(1, '#10254a');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 1200, 630);
-
     ctx.fillStyle = 'rgba(255,255,255,.08)';
-    ctx.fillRect(42, 42, 1116, 546);
-
-    const logo = new Image();
-    logo.src = 'assets/share-logo.png';
-
-    const draw = () => {
-      try {
-        ctx.drawImage(logo, 62, 48, 160, 160);
-      } catch (_) {}
-
-      ctx.fillStyle = '#eef4ff';
-      ctx.font = 'bold 58px Arial';
-      const title = `${trip.indulas} → ${trip.erkezes}`;
-      wrapShareText(ctx, title, 72, 245, 1040, 66);
-
-      ctx.font = '34px Arial';
-      ctx.fillStyle = '#dbe8ff';
-      ctx.fillText(`${trip.datum} • ${trip.ido}`, 72, 410);
-      ctx.fillText(`${fmtCurrency(trip.ar)} Ft / fő`, 72, 465);
-      ctx.fillText(`${seatCounts(trip).free} szabad hely`, 72, 520);
-
-      ctx.fillStyle = '#2563eb';
-      roundRect(ctx, 760, 470, 330, 86, 18);
-      ctx.fill();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 30px Arial';
-      ctx.fillText('Megnyitás a fuvarhoz', 805, 523);
-
-      ctx.fillStyle = '#b8c9ea';
-      ctx.font = '28px Arial';
-      ctx.fillText(APP_CONFIG.brandName, 72, 598);
-      ctx.fillText(APP_CONFIG.siteUrl, 950, 598);
-
-      return c.toDataURL('image/png');
-    };
-
-    if (logo.complete) return draw();
-    return draw();
-  }
-
-  function wrapShareText(ctx, text, x, y, maxWidth, lineHeight) {
-    const words = String(text || '').split(' ');
-    let line = '';
-    for (let i = 0; i < words.length; i++) {
-      const test = line + words[i] + ' ';
-      if (ctx.measureText(test).width > maxWidth && i > 0) {
-        ctx.fillText(line, x, y);
-        line = words[i] + ' ';
-        y += lineHeight;
-      } else {
-        line = test;
-      }
-    }
-    ctx.fillText(line, x, y);
-  }
-
-  function roundRect(ctx, x, y, width, height, radius) {
-    ctx.beginPath();
-    ctx.moveTo(x + radius, y);
-    ctx.arcTo(x + width, y, x + width, y + height, radius);
-    ctx.arcTo(x + width, y + height, x, y + height, radius);
-    ctx.arcTo(x, y + height, x, y, radius);
-    ctx.arcTo(x, y, x + width, y, radius);
-    ctx.closePath();
-  }
-
-  function downloadShareImage(trip) {
-    try {
-      const dataUrl = shareCanvasDataUrl(trip);
-      const link = document.createElement('a');
-      link.download = 'fuvarvelunk-poszt.png';
-      link.href = dataUrl;
-      link.click();
-    } catch (_) {}
+    ctx.fillRect(48, 48, 1104, 534);
+    ctx.fillStyle = '#eef4ff';
+    ctx.font = 'bold 62px Arial';
+    ctx.fillText(`${trip.indulas} → ${trip.erkezes}`, 72, 160);
+    ctx.font = '34px Arial';
+    ctx.fillStyle = '#dbe8ff';
+    ctx.fillText(`${trip.datum} • ${trip.ido}`, 72, 235);
+    ctx.fillText(`${fmtCurrency(trip.ar)} Ft / fő`, 72, 290);
+    ctx.fillText(`${seatCounts(trip).free} szabad hely`, 72, 345);
+    ctx.font = '30px Arial';
+    ctx.fillStyle = '#b8c9ea';
+    ctx.fillText(APP_CONFIG.brandName + ' • ' + APP_CONFIG.siteUrl, 72, 560);
+    return c.toDataURL('image/png');
   }
 
   async function shareTrip(trip) {
     const url = APP_CONFIG.siteUrl + 'trip.html?id=' + trip.id;
-    const text = `${trip.indulas} → ${trip.erkezes}
-${trip.datum} ${trip.ido}
-${fmtCurrency(trip.ar)} Ft / fő
-Foglalás itt: ${url}`;
-
-    // mindig legyen letölthető egy használható posztkép
-    downloadShareImage(trip);
-
-    const ua = (navigator.userAgent || '').toLowerCase();
-    const isMobile = /android|iphone|ipad|mobile/.test(ua);
-
+    const text = `${trip.indulas} → ${trip.erkezes} | ${trip.datum} ${trip.ido} | ${fmtCurrency(trip.ar)} Ft / fő`;
+    const dataUrl = shareCanvasDataUrl(trip);
     try {
-      if (navigator.share && isMobile) {
-        await navigator.share({
-          title: `${trip.indulas} → ${trip.erkezes}`,
-          text,
-          url
-        });
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], 'fuvarvelunk-poszt.png', { type: 'image/png' });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ title: APP_CONFIG.brandName, text, url, files: [file] });
         return;
       }
     } catch (_) {}
-
-    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(`${trip.indulas} → ${trip.erkezes} | ${trip.datum} ${trip.ido} | ${fmtCurrency(trip.ar)} Ft / fő`)}`;
-    window.open(fbUrl, '_blank', 'noopener');
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
   }
 
   async function uploadPublicFile(bucket, file, folder = 'uploads') {
