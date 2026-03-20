@@ -1,5 +1,22 @@
 <!DOCTYPE html><html lang="hu"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="icon" type="image/svg+xml" href="assets/favicon.svg"><link rel="stylesheet" href="styles.css"><title>Fuvar feladása – FuvarVelünk.hu.hu</title></head><body>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="icon" type="image/svg+xml" href="assets/favicon.svg"><link rel="stylesheet" href="styles.css"><title>Fuvar feladása – FuvarVelünk.hu.hu</title>
+<meta name="description" content="Adj fel új fuvart egyszerűen a FuvarVelünk.hu oldalon.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="FuvarVelünk.hu">
+<meta property="og:title" content="Fuvar feladása – FuvarVelünk.hu">
+<meta property="og:description" content="Adj fel új fuvart egyszerűen a FuvarVelünk.hu oldalon.">
+<meta property="og:url" content="https://fuvarvelunk.hu/fuvar-feladas.html">
+<meta property="og:image" content="https://fuvarvelunk.hu/assets/share-logo.png">
+<meta property="og:image:secure_url" content="https://fuvarvelunk.hu/assets/share-logo.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1024">
+<meta property="og:image:height" content="1024">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Fuvar feladása – FuvarVelünk.hu">
+<meta name="twitter:description" content="Adj fel új fuvart egyszerűen a FuvarVelünk.hu oldalon.">
+<meta name="twitter:image" content="https://fuvarvelunk.hu/assets/share-logo.png">
+<link rel="image_src" href="https://fuvarvelunk.hu/assets/share-logo.png">
+</head><body>
 <header class="site-header"><div class="container nav">
 <a class="logo-wrap" href="index.html"><img src="assets/logo-fuvarvelunk.svg" alt="FuvarVelünk"><span data-brand>FuvarVelünk.hu</span></a>
 <nav>
@@ -13,5 +30,4 @@
 <button type="button" data-auth="user" data-logout class="hidden">Kilépés</button>
 </nav></div></header>
 <main class="section"><div class="container"><span class="eyebrow">Új hirdetés</span><h1 class="page-title">Fuvar feladása</h1><p class="lead">Csak belépett felhasználó adhat fel fuvart. A hirdetés admin jóváhagyás után jelenik meg.</p><form id="tripForm" class="card form-stack"><div class="grid-2"><label><span>Sofőr neve</span><input name="driverName" required></label><label><span>Kapcsolati e-mail</span><input name="contactEmail" type="email" required></label></div><div class="grid-3"><label><span>Telefonszám</span><input name="phone" required></label><label><span>Autó típusa</span><input name="carType" placeholder="pl. Skoda Octavia" required></label><label><span>Bankszámlaszám (opcionális)</span><input name="bankAccount" placeholder="pl. HU12 1234 1234 1234 1234 1234 1234"></label></div><div class="grid-2"><label><span>Indulás</span><input name="origin" required></label><label><span>Érkezés</span><input name="destination" required></label></div><div class="grid-3"><label><span>Dátum</span><input name="date" type="date" required></label><label><span>Idő</span><input name="time" type="time" required></label><label><span>Ár / fő (Ft)</span><input name="price" type="number" min="0" required></label></div><div class="grid-2"><label><span>Hány személyes az autó</span><input name="osszHely" type="number" min="1" value="4" required></label><label><span>Mennyi szabad hely van</span><input name="szabadHely" type="number" min="1" value="4" required></label></div><div class="grid-2"><label><span>Fizetési módok</span><div class="card file-card"><label><input type="checkbox" name="fizetesiMod" value="barion" checked> Utalás a sofőrnek</label><br><label><input type="checkbox" name="fizetesiMod" value="cash" checked> Készpénz a sofőrnek</label></div></label><label><span>Megjegyzés</span><textarea name="note" placeholder="pl. kisállat hozható, autópályán megyek"></textarea></label></div><div id="tripFormMsg" class="form-message"></div><button class="btn btn-primary" type="submit">Fuvar beküldése</button></form></div></main>
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script><script defer src="js/config.js"></script><script defer src="js/supabase-client.js"></script><script defer src="js/auth.js"></script><script defer src="js/app.js"></script><script src="js/mobile-nav.js"></script>
-</body></html>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script><script defer src="js/config.js"></script><script defer src="js/supabase-client.js"></script><script defer src="js/auth.js"></script><script defer src="js/app.js"></script></body></html>
