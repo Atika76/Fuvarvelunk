@@ -708,8 +708,9 @@ const App = (() => {
   }
 
   async function sendNotificationMail(kind, payload) {
-    if (!APP_CONFIG.notificationFunctionUrl) return false;
-    let success = false;
+    if (!APP_CONFIG.notificationFunctionUrl) {
+      return { ok: false, skipped: true, message: 'Az értesítési funkció nincs beállítva.' };
+    }
     try {
       const adminEmail = await AppAuth.fetchAdminEmail();
       const res = await fetch(APP_CONFIG.notificationFunctionUrl, {
@@ -719,15 +720,37 @@ const App = (() => {
       });
       let data = null;
       try { data = await res.json(); } catch (_) {}
-      const emailResult = Array.isArray(data?.results)
+
+      const emailResult = data?.result || (Array.isArray(data?.results)
         ? data.results.find(x => x && x.channel === 'email')
-        : null;
-      success = !!(emailResult?.ok || (res.ok && data?.ok === true));
-      await logEmailEvent({ tipus: kind, cel_email: kind === 'uj_foglalas' ? (payload.sofor_email || '') : (payload.utas_email || adminEmail), sikeres: success, targy: data?.subject || kind, payload: { ...payload, response: data || null } });
-      return success;
+        : null);
+      const pushResult = data?.push || (Array.isArray(data?.results)
+        ? data.results.find(x => x && x.channel === 'push')
+        : null);
+      const ok = !!(emailResult?.ok || (res.ok && data?.ok === true));
+      const message = data?.frontendMessage
+        || (ok
+          ? 'Az e-mail értesítés sikeresen elindult.'
+          : 'A mentés sikerült, de az e-mail értesítés nem indult el teljesen.');
+
+      await logEmailEvent({
+        tipus: kind,
+        cel_email: kind === 'uj_foglalas' ? (payload.sofor_email || '') : (payload.utas_email || adminEmail),
+        sikeres: ok,
+        targy: data?.subject || kind,
+        payload: { ...payload, response: data || null, push_ok: !!pushResult?.ok }
+      });
+
+      return {
+        ok,
+        message,
+        emailOk: !!emailResult?.ok,
+        pushOk: !!pushResult?.ok,
+        raw: data || null
+      };
     } catch (_) {
       await logEmailEvent({ tipus: kind, cel_email: payload?.sofor_email || payload?.utas_email || '', sikeres: false, statusz: 'sikertelen', targy: kind, payload });
-      return false;
+      return { ok: false, message: 'Az e-mail értesítés nem ment ki.', emailOk: false, pushOk: false, raw: null };
     }
   }
 
@@ -789,9 +812,8 @@ const App = (() => {
         <div>
           <div class="card info-card">
             <div class="small-help">Útvonal és megosztás</div>
-            <p style="margin:8px 0 0;color:var(--muted)">Térkép, Google útvonal és Facebook-megosztás.</p>
+            <p style="margin:8px 0 0;color:var(--muted)">Google útvonal és Facebook-megosztás.</p>
             <div class="inline-pills" style="margin-top:12px">
-              <button class="btn btn-ghost js-map-focus" data-origin="${escapeHtml(trip.indulas)}" data-destination="${escapeHtml(trip.erkezes)}">Térkép</button>
               <a class="btn btn-ghost" target="_blank" rel="noopener" href="${buildGoogleMapsDirectionsUrl(trip.indulas, trip.erkezes)}">Google útvonal</a>
               <button class="btn btn-ghost js-share-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}'>Megosztás</button>
               <a class="btn btn-ghost" href="trip.html?id=${trip.id}">Részletek</a>
@@ -837,7 +859,6 @@ const App = (() => {
         ${(isAdmin || manager) && tripHasBookings(trip) ? `<div class="inline-pills" style="margin:10px 0 0"><span class="status info">Van foglalás ezen a fuvaron</span></div>` : ''}
         <div class="trip-tools">
           <a class="btn btn-ghost" href="trip.html?id=${trip.id}${(isAdmin || manager) ? '#driverBookingsSection' : ''}">Részletek${(isAdmin || manager) && tripHasBookings(trip) ? ' / foglalások' : ''}</a>
-          <button class="btn btn-ghost js-map-focus" data-origin="${escapeHtml(trip.indulas)}" data-destination="${escapeHtml(trip.erkezes)}">Térkép</button>
           <a class="btn btn-ghost" target="_blank" rel="noopener" href="${buildGoogleMapsDirectionsUrl(trip.indulas, trip.erkezes)}">Google útvonal</a>
           <button class="btn btn-ghost js-share-trip" data-trip='${encodeURIComponent(JSON.stringify(trip))}'>Megosztás</button>
           ${isAdmin ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Admin szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Admin törlés</button>` : ownTrip ? (manager ? `<button class="btn btn-secondary js-trip-edit" data-id="${trip.id}">Szerkesztés</button><button class="btn btn-danger js-trip-delete" data-id="${trip.id}">Törlés</button>` : `<div class="notice">Ez a saját fuvarod.</div>`) : `<button class="btn btn-primary js-book-trip" data-own-booking="${trip.viewer_has_booking ? '1' : '0'}" data-trip='${encodeURIComponent(JSON.stringify(trip))}' ${full ? 'disabled' : ''}>${bookingButtonLabel(trip)}</button><a class="btn btn-secondary" href="kapcsolat.html?tripId=${trip.id}&driverName=${encodeURIComponent(trip.nev || '')}&driverEmail=${encodeURIComponent(trip.email || '')}">Kérdés a sofőrnek</a>`}
@@ -945,8 +966,8 @@ const App = (() => {
     if (!payload.nev || !payload.indulas || !payload.erkezes) throw new Error('Tölts ki minden kötelező mezőt.');
     const { error } = await sb.from(tableTrips).insert([payload]);
     if (error) throw error;
-    const mailOk = await sendNotificationMail('uj_fuvar', payload);
-    return mailOk;
+    const notifyResult = await sendNotificationMail('uj_fuvar', payload);
+    return notifyResult;
   }
 
   async function submitBooking(trip, form) {
@@ -986,9 +1007,9 @@ const App = (() => {
     const { error } = await sb.from(tableBookings).insert([booking]);
     if (error) throw error;
     const payload = { ...booking, sofor_email: trip.email, sofor_nev: trip.nev, sofor_telefon: trip.telefon || '', indulas: trip.indulas, erkezes: trip.erkezes, datum: trip.datum, ido: trip.ido, fizetesi_mod_text: method === 'cash' ? 'Készpénz a sofőrnek' : 'Utalás a sofőrnek' };
-    const mailOk = await sendNotificationMail('uj_foglalas', payload);
-    const passengerMailOk = await sendNotificationMail('utas_visszaigazolas', payload);
-    return { ...booking, __mailOk: mailOk, __passengerMailOk: passengerMailOk };
+    const notifyResult = await sendNotificationMail('uj_foglalas', payload);
+    const passengerNotifyResult = await sendNotificationMail('utas_visszaigazolas', payload);
+    return { ...booking, __notifyResult: notifyResult, __passengerNotifyResult: passengerNotifyResult };
   }
 
   async function submitRating(trip, form, tipus) {
@@ -1023,12 +1044,6 @@ const App = (() => {
 
   async function bindGlobalActions() {
     document.body.addEventListener('click', async (e) => {
-      const mapBtn = e.target.closest('.js-map-focus');
-      if (mapBtn) {
-        await focusRoute(mapBtn.dataset.origin, mapBtn.dataset.destination);
-        document.getElementById('tripsMap')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
       const shareBtn = e.target.closest('.js-share-trip');
       if (shareBtn) {
         await shareTrip(JSON.parse(decodeURIComponent(shareBtn.dataset.trip)));
@@ -1084,9 +1099,15 @@ const App = (() => {
           msg.textContent = 'Mentés...';
           try {
             const booking = await submitBooking(trip, ev.currentTarget);
-            msg.textContent = booking.__mailOk
-              ? (booking.__passengerMailOk ? 'Foglalás rögzítve. A sofőr és az utas visszaigazoló e-mailje is elindult.' : 'Foglalás rögzítve. A sofőr e-mailje elindult, de az utas visszaigazolása nem ment ki.')
-              : 'Foglalás rögzítve, de az e-mail értesítés nem ment ki. Ellenőrizd a Supabase Edge Function logokat és a Resend beállításokat.';
+            const driverNotice = booking.__notifyResult?.message || '';
+            const passengerOk = !!booking.__passengerNotifyResult?.ok;
+            if (booking.__notifyResult?.ok) {
+              msg.textContent = passengerOk
+                ? `${driverNotice} Az utas visszaigazoló e-mailje is elindult.`
+                : `${driverNotice} Az utas visszaigazoló e-mailje nem indult el teljesen.`;
+            } else {
+              msg.textContent = `Foglalás rögzítve, de az értesítés nem volt teljes. ${driverNotice}`.trim();
+            }
             setTimeout(() => location.reload(), 900);
           } catch (err) {
             msg.textContent = err.message || 'Nem sikerült a foglalás.';
@@ -1274,10 +1295,6 @@ const App = (() => {
 
   async function initTripsPage() {
     if (!document.getElementById('tripsList')) return;
-    if (document.getElementById('tripsMap')) {
-      activeMap = L.map('tripsMap').setView([47.4979, 19.0402], 7);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(activeMap);
-    }
     const params = new URLSearchParams(location.search);
     const originInput = document.getElementById('filterOrigin');
     const destinationInput = document.getElementById('filterDestination');
@@ -1302,7 +1319,6 @@ const App = (() => {
         const filters = { origin: originInput.value.trim(), destination: destinationInput.value.trim(), date: dateInput.value, maxPrice: maxPriceInput?.value || '', dayPreset: dayPresetInput?.value || '', sort: sortInput?.value || 'time_asc', onlyFree: !!onlyFreeInput?.checked };
         const trips = await enrichTripsWithRatings(await enrichTripsWithBookings(await fetchApprovedTripsRobust(filters)));
         list.innerHTML = trips.length ? trips.map(t => tripListCard(t)).join('') : '<div class="empty-state">Nincs a keresésnek megfelelő fuvar.</div>';
-        if (trips[0]) await focusRoute(trips[0].indulas, trips[0].erkezes);
         if (!trips.length && recWrap) {
           const all = await enrichTripsWithRatings(await enrichTripsWithBookings(await fetchApprovedTripsRobust({})));
           const rec = buildRecommendations(all, filters);
@@ -1347,15 +1363,17 @@ const App = (() => {
       const msg = document.getElementById('tripFormMsg');
       msg.textContent = 'Mentés...';
       try {
-        const mailOk = await submitTrip(form);
+        const notifyResult = await submitTrip(form);
         const isAdminTrip = await AppAuth.isAdmin(user?.email);
-        msg.textContent = isAdminTrip
-          ? 'A fuvar rögzítve lett és adminként azonnal meg is jelent.'
-          : (!APP_CONFIG.notificationFunctionUrl
-              ? 'A fuvar rögzítve lett. Admin jóváhagyás után megjelenik a listában.'
-              : (mailOk
-                  ? 'A fuvar rögzítve lett. Az admin e-mail értesítés is sikeresen elindult.'
-                  : 'A fuvar rögzítve lett. Az e-mail vagy a push visszajelzés nem volt teljes, de a hirdetés mentve lett.'));
+        if (isAdminTrip) {
+          msg.textContent = 'A fuvar rögzítve lett és adminként azonnal meg is jelent.';
+        } else if (!APP_CONFIG.notificationFunctionUrl) {
+          msg.textContent = 'A fuvar rögzítve lett. Admin jóváhagyás után megjelenik a listában.';
+        } else if (notifyResult?.ok) {
+          msg.textContent = `${notifyResult.message}${notifyResult.pushOk ? ' A push értesítés is elindult.' : ''}`;
+        } else {
+          msg.textContent = `A fuvar rögzítve lett, de az értesítés nem volt teljes. ${notifyResult?.message || ''}`.trim();
+        }
         form.reset();
         form.querySelector('[name="contactEmail"]').value = user?.email || '';
         if (driverNameInput) driverNameInput.value = user?.user_metadata?.name || user?.user_metadata?.full_name || (user?.email ? String(user.email).split('@')[0] : '');
@@ -1692,7 +1710,6 @@ const App = (() => {
         </section>
       </section>`;
 
-    try { await focusRoute(trip.indulas, trip.erkezes); } catch (err) { console.warn('Map focus failed', err); }
     const session = await AppAuth.getSession();
     const currentEmail = (session?.user?.email || '').trim().toLowerCase();
     const tripEmail = (trip?.email || '').trim().toLowerCase();
