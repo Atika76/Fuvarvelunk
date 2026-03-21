@@ -326,19 +326,154 @@ const App = (() => {
     return c.toDataURL('image/png');
   }
 
-  async function shareTrip(trip) {
-    const url = APP_CONFIG.siteUrl + 'trip.html?id=' + trip.id;
-    const text = `${trip.indulas} → ${trip.erkezes} | ${trip.datum} ${trip.ido} | ${fmtCurrency(trip.ar)} Ft / fő`;
+
+  function shareTripText(trip) {
+    return `${trip.indulas} → ${trip.erkezes} | ${trip.datum} ${trip.ido} | ${fmtCurrency(trip.ar)} Ft / fő`;
+  }
+
+  function shareTripUrl(trip) {
+    return (APP_CONFIG.siteUrl || 'https://fuvarvelunk.hu/') + 'trip.html?id=' + trip.id;
+  }
+
+  async function shareCanvasBlob(trip) {
     const dataUrl = await shareCanvasDataUrl(trip);
+    return await (await fetch(dataUrl)).blob();
+  }
+
+  async function copyShareLink(trip) {
+    const text = `${shareTripText(trip)}
+${shareTripUrl(trip)}`;
     try {
-      const blob = await (await fetch(dataUrl)).blob();
-      const file = new File([blob], 'fuvarvelunk-poszt.png', { type: 'image/png' });
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ title: APP_CONFIG.brandName, text, url, files: [file] });
+      await navigator.clipboard.writeText(text);
+      alert('A fuvar linkje kimásolva.');
+    } catch (_) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      alert('A fuvar linkje kimásolva.');
+    }
+  }
+
+  async function downloadShareImage(trip) {
+    const dataUrl = await shareCanvasDataUrl(trip);
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = 'fuvarvelunk-poszt.png';
+    a.click();
+  }
+
+  function closeShareOverlay() {
+    document.querySelector('.fv-share-overlay')?.remove();
+  }
+
+  function ensureShareOverlayStyles() {
+    if (document.getElementById('fv-share-overlay-styles')) return;
+    const st = document.createElement('style');
+    st.id = 'fv-share-overlay-styles';
+    st.textContent = `
+      .fv-share-overlay{position:fixed;inset:0;background:rgba(2,6,23,.72);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px}
+      .fv-share-card{width:min(560px,100%);background:#0f172a;border:1px solid rgba(255,255,255,.08);border-radius:24px;box-shadow:0 24px 80px rgba(0,0,0,.45);padding:20px;color:#fff}
+      .fv-share-card h3{margin:0 0 8px;font-size:28px}
+      .fv-share-card p{margin:0 0 16px;color:#cbd5e1;line-height:1.5}
+      .fv-share-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+      .fv-share-actions button,.fv-share-actions a{display:flex;align-items:center;justify-content:center;min-height:52px;border-radius:16px;border:1px solid rgba(255,255,255,.08);background:#1e293b;color:#fff;text-decoration:none;font-weight:700;padding:0 14px;cursor:pointer}
+      .fv-share-actions .primary{background:#2563eb}
+      .fv-share-actions .success{background:#16a34a}
+      .fv-share-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+      .fv-share-close{width:42px;height:42px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:#1e293b;color:#fff;cursor:pointer;font-size:22px}
+      @media (max-width:640px){.fv-share-actions{grid-template-columns:1fr}.fv-share-card{padding:18px}}
+    `;
+    document.head.appendChild(st);
+  }
+
+  function openPopup(url) {
+    window.open(url, '_blank', 'width=900,height=720,noopener,noreferrer');
+  }
+
+  async function shareViaMessenger(trip) {
+    const url = shareTripUrl(trip);
+    const text = shareTripText(trip);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: APP_CONFIG.brandName, text, url });
+        closeShareOverlay();
         return;
-      }
-    } catch (_) {}
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
+      } catch (_) {}
+    }
+    await copyShareLink(trip);
+    openPopup('https://www.messenger.com/');
+    closeShareOverlay();
+  }
+
+  async function shareViaWhatsApp(trip) {
+    const url = shareTripUrl(trip);
+    const text = `${shareTripText(trip)}
+${url}`;
+    openPopup(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`);
+    closeShareOverlay();
+  }
+
+  async function shareViaFacebook(trip) {
+    const url = shareTripUrl(trip);
+    const quote = shareTripText(trip);
+    openPopup(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(quote)}`);
+    closeShareOverlay();
+  }
+
+  function showShareOverlay(trip) {
+    ensureShareOverlayStyles();
+    closeShareOverlay();
+    const div = document.createElement('div');
+    div.className = 'fv-share-overlay';
+    div.innerHTML = `
+      <div class="fv-share-card">
+        <div class="fv-share-top">
+          <div>
+            <h3>Fuvar megosztása</h3>
+            <p>${trip.indulas || ''} → ${trip.erkezes || ''}<br>${trip.datum || ''} ${trip.ido || ''} · ${fmtCurrency(trip.ar)} Ft / fő</p>
+          </div>
+          <button class="fv-share-close" type="button" aria-label="Bezárás">×</button>
+        </div>
+        <div class="fv-share-actions">
+          <button class="primary js-share-facebook" type="button">Facebook</button>
+          <button class="primary js-share-messenger" type="button">Messenger</button>
+          <button class="success js-share-whatsapp" type="button">WhatsApp</button>
+          <button class="js-share-download" type="button">Kép letöltése</button>
+          <button class="js-share-copy" type="button">Link másolása</button>
+          <button class="js-share-native" type="button">Rendszer megosztás</button>
+        </div>
+      </div>`;
+    document.body.appendChild(div);
+    div.addEventListener('click', (e) => {
+      if (e.target === div) closeShareOverlay();
+    });
+    div.querySelector('.fv-share-close').onclick = closeShareOverlay;
+    div.querySelector('.js-share-facebook').onclick = () => shareViaFacebook(trip);
+    div.querySelector('.js-share-messenger').onclick = () => shareViaMessenger(trip);
+    div.querySelector('.js-share-whatsapp').onclick = () => shareViaWhatsApp(trip);
+    div.querySelector('.js-share-download').onclick = () => downloadShareImage(trip);
+    div.querySelector('.js-share-copy').onclick = () => copyShareLink(trip);
+    div.querySelector('.js-share-native').onclick = async () => {
+      const url = shareTripUrl(trip);
+      const text = shareTripText(trip);
+      try {
+        if (navigator.share) {
+          await navigator.share({ title: APP_CONFIG.brandName, text, url });
+          closeShareOverlay();
+          return;
+        }
+      } catch (_) {}
+      await copyShareLink(trip);
+      closeShareOverlay();
+    };
+  }
+
+
+  async function shareTrip(trip) {
+    showShareOverlay(trip);
   }
 
 async function uploadPublicFile(bucket, file, folder = 'uploads') {
