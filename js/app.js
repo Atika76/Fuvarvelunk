@@ -212,35 +212,124 @@ const App = (() => {
     }
   }
 
-  function shareCanvasDataUrl(trip) {
+  
+  function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 3) {
+    const words = String(text || '').split(/\s+/).filter(Boolean);
+    const lines = [];
+    let current = '';
+
+    for (const word of words) {
+      const test = current ? current + ' ' + word : word;
+      if (ctx.measureText(test).width > maxWidth && current) {
+        lines.push(current);
+        current = word;
+        if (lines.length >= maxLines - 1) break;
+      } else {
+        current = test;
+      }
+    }
+
+    if (current) lines.push(current);
+
+    for (let i = 0; i < Math.min(lines.length, maxLines); i++) {
+      let line = lines[i];
+      if (i === maxLines - 1 && lines.length > maxLines) {
+        while (ctx.measureText(line + '…').width > maxWidth && line.length > 1) {
+          line = line.slice(0, -1);
+        }
+        line += '…';
+      }
+      ctx.fillText(line, x, y + i * lineHeight);
+    }
+  }
+
+  function loadShareLogo() {
+    return new Promise((resolve) => {
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = 'assets/share-logo.png?v=20260320';
+      } catch (_) {
+        resolve(null);
+      }
+    });
+  }
+
+  async function shareCanvasDataUrl(trip) {
     const c = document.createElement('canvas');
     c.width = 1200; c.height = 630;
     const ctx = c.getContext('2d');
+
     const g = ctx.createLinearGradient(0, 0, 1200, 630);
-    g.addColorStop(0, '#0d1d39');
-    g.addColorStop(1, '#10254a');
+    g.addColorStop(0, '#071225');
+    g.addColorStop(0.55, '#123c86');
+    g.addColorStop(1, '#1d4ed8');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 1200, 630);
+
+    ctx.fillStyle = 'rgba(255,255,255,.07)';
+    ctx.fillRect(34, 34, 1132, 562);
     ctx.fillStyle = 'rgba(255,255,255,.08)';
-    ctx.fillRect(48, 48, 1104, 534);
-    ctx.fillStyle = '#eef4ff';
-    ctx.font = 'bold 62px Arial';
-    ctx.fillText(`${trip.indulas} → ${trip.erkezes}`, 72, 160);
-    ctx.font = '34px Arial';
-    ctx.fillStyle = '#dbe8ff';
-    ctx.fillText(`${trip.datum} • ${trip.ido}`, 72, 235);
-    ctx.fillText(`${fmtCurrency(trip.ar)} Ft / fő`, 72, 290);
-    ctx.fillText(`${seatCounts(trip).free} szabad hely`, 72, 345);
-    ctx.font = '30px Arial';
-    ctx.fillStyle = '#b8c9ea';
-    ctx.fillText(APP_CONFIG.brandName + ' • ' + APP_CONFIG.siteUrl, 72, 560);
+    ctx.fillRect(60, 60, 1080, 120);
+    ctx.fillRect(60, 210, 1080, 300);
+
+    const logo = await loadShareLogo();
+    if (logo) {
+      ctx.drawImage(logo, 80, 80, 290, 82);
+    } else {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 44px Arial';
+      ctx.fillText(APP_CONFIG.brandName || 'FuvarVelünk.hu', 80, 130);
+      ctx.font = '28px Arial';
+      ctx.fillStyle = '#dbeafe';
+      ctx.fillText('Utazz velünk!', 84, 165);
+    }
+
+    const route = `${trip.indulas || ''} → ${trip.erkezes || ''}`;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 58px Arial';
+    wrapCanvasText(ctx, route, 80, 292, 900, 68, 2);
+
+    ctx.fillStyle = '#dbeafe';
+    ctx.font = 'bold 32px Arial';
+    ctx.fillText(`📅 ${trip.datum || ''}   🕐 ${trip.ido || ''}`, 80, 425);
+
+    ctx.fillStyle = '#22c55e';
+    ctx.font = 'bold 50px Arial';
+    ctx.fillText(`💰 ${fmtCurrency(trip.ar)} Ft / fő`, 80, 485);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 30px Arial';
+    ctx.fillText(`👥 ${seatCounts(trip).free} szabad hely`, 80, 540);
+
+    const carText = trip.auto_tipus || trip.auto || trip.autoTipus || 'Kényelmes utazás';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '28px Arial';
+    ctx.fillText(`🚗 ${carText}`, 80, 588);
+
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(790, 428, 320, 82);
+    ctx.fillStyle = '#111827';
+    ctx.font = 'bold 29px Arial';
+    ctx.fillText('FOGLALJ MOST', 845, 478);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 24px Arial';
+    ctx.fillText('Megnyitás: fuvarvelunk.hu', 775, 548);
+
+    ctx.fillStyle = '#dbeafe';
+    ctx.font = '24px Arial';
+    ctx.fillText(APP_CONFIG.siteUrl || 'https://fuvarvelunk.hu', 80, 608);
+
     return c.toDataURL('image/png');
   }
 
   async function shareTrip(trip) {
     const url = APP_CONFIG.siteUrl + 'trip.html?id=' + trip.id;
     const text = `${trip.indulas} → ${trip.erkezes} | ${trip.datum} ${trip.ido} | ${fmtCurrency(trip.ar)} Ft / fő`;
-    const dataUrl = shareCanvasDataUrl(trip);
+    const dataUrl = await shareCanvasDataUrl(trip);
     try {
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], 'fuvarvelunk-poszt.png', { type: 'image/png' });
@@ -252,7 +341,7 @@ const App = (() => {
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
   }
 
-  async function uploadPublicFile(bucket, file, folder = 'uploads') {
+async function uploadPublicFile(bucket, file, folder = 'uploads') {
     if (!file) return '';
     const ext = (String(file.name || '').split('.').pop() || 'jpg').toLowerCase();
     const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;

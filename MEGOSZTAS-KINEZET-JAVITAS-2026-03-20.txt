@@ -1,0 +1,12 @@
+MEGOSZTAS-KINEZET-JAVITAS-2026-03-20
+
+Ebben a verzióban csak a megosztásos képgenerálás lett erősítve.
+A kép most nagyobb, jobban olvasható, rajta van:
+- logó
+- útvonal
+- dátum/idő
+- ár
+- szabad hely
+- autó
+- CTA: FOGLALJ MOST
+- domain
