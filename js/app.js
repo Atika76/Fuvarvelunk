@@ -212,240 +212,136 @@ const App = (() => {
     }
   }
 
-  function shareCanvasDataUrl(trip) {
+  
+  function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 3) {
+    const words = String(text || '').split(/\s+/).filter(Boolean);
+    const lines = [];
+    let current = '';
+
+    for (const word of words) {
+      const test = current ? current + ' ' + word : word;
+      if (ctx.measureText(test).width > maxWidth && current) {
+        lines.push(current);
+        current = word;
+        if (lines.length >= maxLines - 1) break;
+      } else {
+        current = test;
+      }
+    }
+
+    if (current) lines.push(current);
+
+    for (let i = 0; i < Math.min(lines.length, maxLines); i++) {
+      let line = lines[i];
+      if (i === maxLines - 1 && lines.length > maxLines) {
+        while (ctx.measureText(line + '…').width > maxWidth && line.length > 1) {
+          line = line.slice(0, -1);
+        }
+        line += '…';
+      }
+      ctx.fillText(line, x, y + i * lineHeight);
+    }
+  }
+
+  function loadShareLogo() {
+    return new Promise((resolve) => {
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = 'assets/share-logo.png?v=20260320';
+      } catch (_) {
+        resolve(null);
+      }
+    });
+  }
+
+  async function shareCanvasDataUrl(trip) {
     const c = document.createElement('canvas');
     c.width = 1200; c.height = 630;
     const ctx = c.getContext('2d');
 
     const g = ctx.createLinearGradient(0, 0, 1200, 630);
-    g.addColorStop(0, '#0b1730');
-    g.addColorStop(1, '#1f4fa3');
+    g.addColorStop(0, '#071225');
+    g.addColorStop(0.55, '#123c86');
+    g.addColorStop(1, '#1d4ed8');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 1200, 630);
 
-    ctx.fillStyle = 'rgba(255,255,255,.10)';
-    ctx.fillRect(40, 40, 1120, 550);
+    ctx.fillStyle = 'rgba(255,255,255,.07)';
+    ctx.fillRect(34, 34, 1132, 562);
     ctx.fillStyle = 'rgba(255,255,255,.08)';
-    ctx.fillRect(72, 72, 1056, 82);
+    ctx.fillRect(60, 60, 1080, 120);
+    ctx.fillRect(60, 210, 1080, 300);
 
-    const logo = new Image();
-    const title = `${trip.indulas} → ${trip.erkezes}`;
-    const dateLine = `${trip.datum} • ${trip.ido}`;
-    const priceLine = `${fmtCurrency(trip.ar)} Ft / fő`;
-    const seatLine = `${seatCounts(trip).free} szabad hely`;
-    const carLine = `${trip.auto || 'FuvarVelünk.hu'}`;
-    const siteLine = (APP_CONFIG.brandName || 'FuvarVelünk.hu') + ' • ' + (APP_CONFIG.siteUrl || 'https://fuvarvelunk.hu');
-
-    function wrapLine(text, x, y, maxWidth, lineHeight, maxLines = 3) {
-      const words = String(text || '').split(' ');
-      let line = '';
-      let lines = 0;
-      for (let i = 0; i < words.length; i++) {
-        const test = line + words[i] + ' ';
-        if (ctx.measureText(test).width > maxWidth && line) {
-          ctx.fillText(line.trim(), x, y);
-          line = words[i] + ' ';
-          y += lineHeight;
-          lines++;
-          if (lines >= maxLines - 1) break;
-        } else {
-          line = test;
-        }
-      }
-      if (line) ctx.fillText(line.trim(), x, y);
-    }
-
-    function drawCard() {
-      ctx.fillStyle = '#eef4ff';
-      ctx.font = 'bold 26px Arial';
-      ctx.fillText(APP_CONFIG.brandName || 'FuvarVelünk.hu', 190, 124);
-
+    const logo = await loadShareLogo();
+    if (logo) {
+      ctx.drawImage(logo, 80, 80, 290, 82);
+    } else {
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 58px Arial';
-      wrapLine(title, 72, 238, 920, 64, 3);
-
-      ctx.font = '32px Arial';
-      ctx.fillStyle = '#dbe8ff';
-      ctx.fillText(dateLine, 72, 360);
-
       ctx.font = 'bold 44px Arial';
-      ctx.fillStyle = '#22c55e';
-      ctx.fillText(priceLine, 72, 430);
-
-      ctx.font = '32px Arial';
-      ctx.fillStyle = '#eef4ff';
-      ctx.fillText(seatLine, 72, 488);
-
+      ctx.fillText(APP_CONFIG.brandName || 'FuvarVelünk.hu', 80, 130);
       ctx.font = '28px Arial';
-      ctx.fillStyle = '#c7d5f2';
-      ctx.fillText(carLine, 72, 540);
-
-      ctx.fillStyle = '#facc15';
-      ctx.fillRect(845, 446, 220, 78);
-      ctx.fillStyle = '#10254a';
-      ctx.font = 'bold 28px Arial';
-      ctx.fillText('MEGNYITÁS', 887, 494);
-
-      ctx.font = '22px Arial';
-      ctx.fillStyle = '#dbe8ff';
-      ctx.fillText(siteLine, 72, 572);
+      ctx.fillStyle = '#dbeafe';
+      ctx.fillText('Utazz velünk!', 84, 165);
     }
 
-    logo.onload = () => {
-      try { ctx.drawImage(logo, 72, 82, 90, 90); } catch (_) {}
-      drawCard();
-    };
-    logo.onerror = drawCard;
-    logo.src = 'assets/share-logo.png';
+    const route = `${trip.indulas || ''} → ${trip.erkezes || ''}`;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 58px Arial';
+    wrapCanvasText(ctx, route, 80, 292, 900, 68, 2);
+
+    ctx.fillStyle = '#dbeafe';
+    ctx.font = 'bold 32px Arial';
+    ctx.fillText(`📅 ${trip.datum || ''}   🕐 ${trip.ido || ''}`, 80, 425);
+
+    ctx.fillStyle = '#22c55e';
+    ctx.font = 'bold 50px Arial';
+    ctx.fillText(`💰 ${fmtCurrency(trip.ar)} Ft / fő`, 80, 485);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 30px Arial';
+    ctx.fillText(`👥 ${seatCounts(trip).free} szabad hely`, 80, 540);
+
+    const carText = trip.auto_tipus || trip.auto || trip.autoTipus || 'Kényelmes utazás';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '28px Arial';
+    ctx.fillText(`🚗 ${carText}`, 80, 588);
+
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(790, 428, 320, 82);
+    ctx.fillStyle = '#111827';
+    ctx.font = 'bold 29px Arial';
+    ctx.fillText('FOGLALJ MOST', 845, 478);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 24px Arial';
+    ctx.fillText('Megnyitás: fuvarvelunk.hu', 775, 548);
+
+    ctx.fillStyle = '#dbeafe';
+    ctx.font = '24px Arial';
+    ctx.fillText(APP_CONFIG.siteUrl || 'https://fuvarvelunk.hu', 80, 608);
 
     return c.toDataURL('image/png');
   }
 
-  function buildTripShareUrl(trip) {
-    return APP_CONFIG.siteUrl + 'trip.html?id=' + trip.id;
-  }
-
-  function buildTripShareText(trip) {
-    return `${trip.indulas} → ${trip.erkezes} | ${trip.datum} ${trip.ido} | ${fmtCurrency(trip.ar)} Ft / fő`;
-  }
-
-  async function downloadTripShareImage(trip) {
-    const dataUrl = shareCanvasDataUrl(trip);
-    const link = document.createElement('a');
-    link.href = dataUrl;
-    link.download = `fuvarvelunk-${trip.id || 'fuvar'}.png`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    return dataUrl;
-  }
-
-  async function copyTripShareText(trip) {
-    const url = buildTripShareUrl(trip);
-    const text = buildTripShareText(trip) + '\n' + url;
+  async function shareTrip(trip) {
+    const url = APP_CONFIG.siteUrl + 'trip.html?id=' + trip.id;
+    const text = `${trip.indulas} → ${trip.erkezes} | ${trip.datum} ${trip.ido} | ${fmtCurrency(trip.ar)} Ft / fő`;
+    const dataUrl = await shareCanvasDataUrl(trip);
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        alert('A fuvar linkje és leírása a vágólapra másolva.');
-        return true;
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], 'fuvarvelunk-poszt.png', { type: 'image/png' });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ title: APP_CONFIG.brandName, text, url, files: [file] });
+        return;
       }
     } catch (_) {}
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      ta.remove();
-      alert('A fuvar linkje és leírása a vágólapra másolva.');
-      return true;
-    } catch (_) {
-      alert(text);
-      return false;
-    }
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
   }
 
-  async function shareViaNativeLinkOnly(trip) {
-    const url = buildTripShareUrl(trip);
-    const text = buildTripShareText(trip);
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: APP_CONFIG.brandName, text, url });
-        return true;
-      } catch (_) {
-        return false;
-      }
-    }
-    return false;
-  }
-
-  function closeTripShareSheet() {
-    document.querySelector('.trip-share-overlay')?.remove();
-  }
-
-  async function openTripShareSheet(trip) {
-    closeTripShareSheet();
-    const overlay = document.createElement('div');
-    overlay.className = 'trip-share-overlay';
-    overlay.innerHTML = `
-      <div class="trip-share-sheet">
-        <button class="trip-share-close" type="button" aria-label="Bezárás">×</button>
-        <div class="trip-share-title">Fuvar megosztása</div>
-        <div class="trip-share-subtitle">${escapeHtml(trip.indulas || '')} → ${escapeHtml(trip.erkezes || '')}</div>
-        <div class="trip-share-actions">
-          <button class="btn btn-primary js-share-facebook" type="button">Facebook</button>
-          <button class="btn btn-secondary js-share-messenger" type="button">Messenger</button>
-          <button class="btn btn-ghost js-share-whatsapp" type="button">WhatsApp</button>
-          <button class="btn btn-ghost js-share-native" type="button">Telefonos megosztás</button>
-          <button class="btn btn-ghost js-share-download" type="button">Kép letöltése</button>
-          <button class="btn btn-ghost js-share-copy" type="button">Link másolása</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-
-    const styleId = 'trip-share-sheet-style';
-    if (!document.getElementById(styleId)) {
-      const style = document.createElement('style');
-      style.id = styleId;
-      style.textContent = `
-        .trip-share-overlay{position:fixed;inset:0;background:rgba(2,8,23,.72);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px}
-        .trip-share-sheet{width:min(560px,100%);background:#0f1f3d;border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:22px;box-shadow:0 24px 80px rgba(0,0,0,.45);position:relative}
-        .trip-share-title{font-size:28px;font-weight:800;color:#fff;margin-bottom:8px}
-        .trip-share-subtitle{font-size:16px;color:#dbe8ff;margin-bottom:18px;line-height:1.4}
-        .trip-share-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-        .trip-share-close{position:absolute;right:14px;top:14px;width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:#fff;font-size:28px;cursor:pointer}
-        @media (max-width:640px){.trip-share-actions{grid-template-columns:1fr}.trip-share-sheet{padding:18px}}
-      `;
-      document.head.appendChild(style);
-    }
-
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) closeTripShareSheet();
-    });
-    overlay.querySelector('.trip-share-close')?.addEventListener('click', closeTripShareSheet);
-
-    const url = buildTripShareUrl(trip);
-    const text = buildTripShareText(trip);
-    const shareText = text + '\n' + url;
-
-    overlay.querySelector('.js-share-facebook')?.addEventListener('click', () => {
-      window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
-    });
-
-    overlay.querySelector('.js-share-messenger')?.addEventListener('click', async () => {
-      const ok = await shareViaNativeLinkOnly(trip);
-      if (!ok) await copyTripShareText(trip);
-    });
-
-    overlay.querySelector('.js-share-whatsapp')?.addEventListener('click', () => {
-      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
-    });
-
-    overlay.querySelector('.js-share-native')?.addEventListener('click', async () => {
-      const ok = await shareViaNativeLinkOnly(trip);
-      if (!ok) await copyTripShareText(trip);
-    });
-
-    overlay.querySelector('.js-share-download')?.addEventListener('click', async () => {
-      await downloadTripShareImage(trip);
-    });
-
-    overlay.querySelector('.js-share-copy')?.addEventListener('click', async () => {
-      await copyTripShareText(trip);
-    });
-  }
-
-  async function shareTrip(trip) {
-    const isDesktop = window.matchMedia ? window.matchMedia('(min-width: 900px)').matches : true;
-    if (isDesktop) {
-      await openTripShareSheet(trip);
-      return;
-    }
-    await openTripShareSheet(trip);
-  }
-
-  async function uploadPublicFile(bucket, file, folder = 'uploads') {(bucket, file, folder = 'uploads') {
+async function uploadPublicFile(bucket, file, folder = 'uploads') {
     if (!file) return '';
     const ext = (String(file.name || '').split('.').pop() || 'jpg').toLowerCase();
     const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
