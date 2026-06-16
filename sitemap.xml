@@ -1,11 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://fuvarvelunk.hu/</loc></url>
-  <url><loc>https://fuvarvelunk.hu/index.html</loc></url>
-  <url><loc>https://fuvarvelunk.hu/fuvarok.html</loc></url>
-  <url><loc>https://fuvarvelunk.hu/fuvar-feladas.html</loc></url>
-  <url><loc>https://fuvarvelunk.hu/belepes.html</loc></url>
-  <url><loc>https://fuvarvelunk.hu/admin.html</loc></url>
-  <url><loc>https://fuvarvelunk.hu/kapcsolat.html</loc></url>
-  <url><loc>https://fuvarvelunk.hu/trip.html</loc></url>
+  <url>
+    <loc>https://fuvarvelunk.hu/</loc>
+    <lastmod>2026-06-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://fuvarvelunk.hu/index.html</loc>
+    <lastmod>2026-06-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://fuvarvelunk.hu/kapcsolat.html</loc>
+    <lastmod>2026-06-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://fuvarvelunk.hu/rolunk.html</loc>
+    <lastmod>2026-06-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
 </urlset>
